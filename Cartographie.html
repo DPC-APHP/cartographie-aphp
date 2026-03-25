@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>AP-HP – Évolution des établissements</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
+/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
+/>
+
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<style>
+.square-marker {
+  width: 14px;
+  height: 14px;
+  background-color: blue;
+  border: 2px solid #333;
+  box-sizing: border-box;
+}
+
+  body { margin: 0; font-family: Arial, sans-serif; }
+  #topbar {
+    padding: 10px;
+    background: #f2f2f2;
+    border-bottom: 1px solid #ccc;
+  }
+  #map { height: calc(100vh - 50px); }
+  #container {
+  display: flex;
+  height: calc(100vh - 50px);
+}
+
+#map {
+  width: 80%;
+}
+
+#sidepanel {
+  width: 20%;
+  padding: 12px;
+  border-left: 1px solid #ccc;
+  background: #fafafa;
+  overflow-y: auto;
+  font-size: 14px;
+}
+#sidepanel a {
+  display: inline-block;
+  margin-top: 12px;   /* espace au-dessus du lien */
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+De&nbsp;:
+<input type="range" id="yearStart" min="829" max="2026" value="829">
+<input type="number" id="labelStart" min="829" max="2026" value="829"
+  style="width:60px; font-weight:bold; border:1px solid #ccc; border-radius:4px; padding:2px 4px;">
+&nbsp;&nbsp;À&nbsp;:
+<input type="range" id="yearSlider" min="829" max="2026" value="2026">
+<input type="number" id="yearLabel" min="829" max="2026" value="2026"
+  style="width:60px; font-weight:bold; border:1px solid #ccc; border-radius:4px; padding:2px 4px;">
+  <input
+  type="text"
+  id="searchInput"
+  placeholder="Rechercher un établissement…"
+  style="margin-left:15px; padding:4px; width:260px;"
+>
+<select
+  id="typeFilter"
+  style="margin-left:10px; padding:4px; font-size:14px; border:1px solid #ccc; border-radius:4px;"
+>
+  <option value="">— Tous les types —</option>
+  <option value="ecole">École</option>
+  <option value="fondation">Fondation</option>
+  <option value="hopital">Hôpital</option>
+  <option value="retraite">Maison de retraite</option>
+  <option value="musee">Musée</option>
+  <option value="orphelinat">Orphelinat</option>
+  <option value="sanatorium">Sanatorium</option>
+</select>
+<style>
+#searchResults {
+  position: absolute;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border: 1px solid #ccc;
+  max-height: 220px;
+  overflow-y: auto;
+  display: none;
+  z-index: 2000;
+  font-size: 16px;
+  font-family: Arial, sans-serif;
+  color: #333;
+  padding: 8px 12px;
+  margin-top: 4px;
+}
+
+.search-result {
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.search-result:hover {
+  background: #f0f0f0;
+}
+
+#searchResults::-webkit-scrollbar {
+  width: 6px;
+}
+
+#searchResults::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 3px;
+}
+.leaflet-tooltip {
+  background: rgba(255,255,255,0.95);
+  color: #333;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font-size: 13px;
+  padding: 3px 6px;
+}
+
+/* =========================
+   Popup avec image
+   ========================= */
+
+.leaflet-popup-content-wrapper {
+  min-width: 200px !important;
+}
+
+.leaflet-popup-content {
+  max-width: 340px;
+  min-width: 160px !important;
+  margin: 8px 30px 8px 12px !important;
+}
+
+.popup-image {
+  width: 100%;          /* prend toute la largeur de la popup */
+  height: auto;         /* conserve les proportions */
+  border-radius: 6px;   /* coins arrondis */
+  margin-top: 6px;
+  display: block;
+}
+.popup-image-caption {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+  line-height: 1.3;
+}
+.leaflet-popup {
+  max-width: none !important;
+}
+/* =========================
+   Overlay image plein écran
+   ========================= */
+
+.image-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 5000;
+  cursor: zoom-out;
+}
+
+.image-overlay img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
+}
+
+#map {
+  position: relative;
+  z-index: 1;
+}
+
+
+</style>
+
+<div id="searchResults"
+  style="
+    position:absolute;
+    background: #fff;             /* blanc plus propre */
+    border-radius: 8px;           /* coins arrondis */
+    border: 1px solid #ccc;       /* bordure fine et discrète */
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* ombre douce autour */
+	padding: 8px 12px;   /* espace à l’intérieur de la boîte */
+	margin-top: 4px;     /* léger espace avec le champ de recherche */
+	max-height:220px;
+    overflow-y:auto;
+    display:none;
+    z-index:2000;
+    font-size:18px;
+  "
+></div>
+
+</div>
+
+<div id="container">
+  <div id="map"></div>
+  
+  <div id="sidepanel">
+    <h3>Établissement</h3>
+    <p>Cliquez sur un établissement sur la carte.</p>
+  </div>
+</div>
+
+<script>
+function normalize(str) {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+const COULEUR_MUSEE = "purple";
+
+/* =========================
+   Données statiques
+   ========================= */
+
+const etablissements = [
+{ nom: "Albert-Chenevier", lat: 48.78905, lng: 2.46130, ouverture: 1959, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FACH%2FFRAPHP075_ACH_3FI4_024.jpg",  legende_image:"Entrée de l'hôpital en 1977.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/05/Albert-Chenevier.pdf", histoire: "En <b>1970</b>, fusionne avec l'hôpital de Créteil pour former le groupe hospitalier Henri-Mondor – Albert-Chenevier." , groupe: "groupe hospitalier Henri-Mondor - Albert-Chenevier" },
+{ nom: "Ambroise-Paré", lat: 48.84947, lng: 2.23567, ouverture: 1923, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FAPR%2FFRAPHP075_APR_3FI4_0278.jpg",  legende_image:"Cour d'entrée de l'hôpital en 1992.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/05/Ambroise-Pare.pdf", histoire: "En <b>1923</b>, l'hôpital de Boulogne ouvre le 1er novembre à Boulogne-Billancourt.\n\nEn <b>1924</b>, par décret du 18 mars, il prend le nom d'hôpital Ambroise-Paré, en hommage au chirurgien Ambroise Paré (1509-1590).\n\nEn <b>1943</b>, l'administration engage le projet de reconstruction de l'établissement.\n\nEn <b>1962</b>, le 7 février, l'AP-HP acquiert un terrain de six hectares du domaine du Bailgü. Les travaux débutent en décembre 1965 sous la direction des architectes Théodon, Lemaresquier et Lebret.\n\nEn <b>1969</b>, le nouvel hôpital Ambroise-Paré est achevé et ouvert au public." , groupe: "" },
+{ nom: "Antoine-Béclère", lat: 48.78869, lng: 2.25464, ouverture: 1971, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F14FI%2FFRAPHP075_14FI_092.jpg",  legende_image:"Entrée principale par la rue de la porte de Trivaux, 1973.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/05/Antoine-Beclere.pdf", histoire: "En <b>1963</b>, l'étude de l'hôpital de Clamart est lancée.\n\nEn <b>1970</b>, bien avant sa mise en service, l'établissement reçoit la dénomination d'hôpital Antoine-Béclère, du nom du fondateur de la radiologie française (1856-1939). Conçu par l'architecte Henri Pottier, il est édifié de 1967 à 1971." , groupe: "" },
+{ nom: "Armand-Trousseau", lat: 48.84222, lng: 2.40556, ouverture: 1901, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F54FI%2FFRAPHP075_54FI_091.jpg",  legende_image:"Entrée de l'hôpital en 1966.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/05/Armand-Trousseau.pdf", histoire: "En <b>1901</b>, le nouvel hôpital Trousseau entre en service le 15 mars, reconstruit par les architectes Maistrasse et Berger au 26 avenue du Dr Arnold Netter dans le 12e arrondissement de Paris." , groupe: "" },
+{ nom: "Aubervilliers (hôpital temporaire d’)", lat: 48.89880, lng: 2.33185, ouverture: 1884, fermeture: 1904, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F4%2FFRAPHP075_C660_4_008.jpg",  legende_image:"L'hôpital temporaire vers 1884-1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/43_Claude-Bernard.pdf", histoire: "En <b>1884</b>, l'hôpital temporaire d'Aubervilliers ouvre le 20 novembre le long des fortifications au nord de Paris pour accueillir les convalescents des hôpitaux parisiens.\n\nEn <b>1901</b>, un projet de reconstruction est adopté.\n\nEn <b>1904</b>, les anciens baraquements sont incendiés le 12 juillet.\n\nEn <b>1905</b>, le nouvel établissement est reconstruit sur les plans de François Renaud et prend le nom d'hôpital Claude-Bernard et est inauguré le 30 novembre." , groupe: "" },
+{ nom: "Avicenne", lat: 48.9095, lng:  2.5009, ouverture: 1979, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F15FI%2FFRAPHP075_15FI_004.jpg",  legende_image:"Entrée de l'hôpital en 1935.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/05/Avicenne.pdf", histoire: "En <b>1931</b>, débute la construction de l'hôpital franco-musulman à Bobigny par les architectes Mantout et Azéma, relevant de la préfecture de la Seine.\n\nEn <b>1935</b>, inauguré en mars, l'établissement entre en fonctionnement le 2 mai.\n\nEn <b>1979</b>, l'administration lui attribue le nom d'hôpital Avicenne, en mémoire d'Abou Ali Al Husayn Ibn Sina dit Avicenne (980-1037), originaire du Turkestan." , groupe: "" },
+{ nom: "Beaujon Clichy", lat: 48.90836, lng: 2.30821, ouverture: 1935, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FBJN%2FFRAPHP075_BJN_3FI4_0077.jpg",  legende_image:"Entrée et loge du concierge en 1935.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/18_Beaujon-Clichy.pdf", histoire: "En <b>1930</b>, un concours est ouvert le 9 août pour remplacer l'hôpital Beaujon à Paris, devenu vétuste.\n\nEn <b>1932</b>, les travaux débutent à Clichy sous la direction de MM. Plousey, Cassan et Jean Walter. Premier hôpital vertical non pavillonnaire monobloc de France, avec ses douze étages." , groupe: "" },
+{ nom: "Berck-sur-mer (hôpital maritime de)", lat: 50.40180, lng: 1.55744, ouverture: 1861, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F16FI%2FFRAPHP075_16FI_041.jpg",  legende_image:"Galeries de cure d'air en 1951.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/21_Berck.pdf", histoire: "En <b>1861</b>, un premier hôpital expérimental est établi sous forme de baraquements de bois sur la plage pour soigner des enfants atteints de rachitisme et d'affections scrofuleuses.\n\nEn <b>1867</b>, un établissement plus vaste est construit sur les plans de l'architecte Émile Lavezzari.\n\nEn <b>1869</b>, inauguré le 8 juillet par l'impératrice Eugénie de Montijo, l'établissement prend le nom d'hôpital Napoléon et compte près de 500 lits.\n\nEn <b>1870</b>, renommé hôpital maritime de la Ville de Paris. Les bâtiments sont agrandis et reconstruits entre 1894 et 1910, portant la capacité à plus de 1 000 lits.\n\nEn <b>1961</b>, l'établissement prend la dénomination d'hôpital maritime de Berck, spécialisé en chirurgie orthopédique et restauration motrice." , groupe: "" },
+{ nom: "Bicêtre", lat: 48.80988, lng: 2.35321, ouverture: 1885, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FBCT%2FFRAPHP075_BCT_3FI4_0130.jpg",  legende_image:"Entrée principale vue de la cour intérieure en 1964.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/22_Bicêtre.pdf", histoire: "En <b>1885</b>, l'établissement reprend son ancienne dénomination et redevient Bicêtre.\n\nEn <b>1950</b>, l'hospice est transformé en hôpital de soins pour aigus.\n\nEn <b>1952</b>, deux pavillons sont modernisés et aménagés en hôpital pour enfants." , groupe: "" },
+{ nom: "Bichat", lat: 48.89957, lng: 2.33228, ouverture: 1882, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FBCH%2FFRAPHP075_BCH_3FI4_0326.jpg",  legende_image:"Entrée de l'hôpital en 1990.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/23_Bichat.pdf", histoire: "Ancien poste caserne du bastion 39.\n\nEn <b>1988</b>, rattaché au groupe hospitalier Bichat-Claude-Bernard." , groupe: "groupe hospitalier Bichat–Claude-Bernard" },
+{ nom: "Bigottini ", lat: 48.93015, lng: 2.50282, ouverture: 1906, fermeture: 1970, type: "retraite", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F17FI%2FFRAPHP075_17FI_02.jpg",  legende_image:"Entrée de l'hôpital en 1978.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/03/Bigottini.pdf", histoire: "En <b>1903</b>, l'abbé Dumont donne à l'administration une propriété à Aulnay-sous-Bois en vue de l'aménagement d'un hospice.\n\nEn <b>1906</b>, l'établissement ouvre le 1er juin sous le nom de maison de retraite Bigottini, grâce aux legs du baron Alphonse de Rothschild et de François Bigottini. Agrandi quelques années plus tard grâce à la fondation Millard.\n\nEn <b>1970</b>, par arrêté ministériel du 20 août, rattaché à l'hôpital René-Muret de Sevran, prend la dénomination d'hôpital René-Muret – Bigottini.\n\nEn <b>2019</b>, intègre le groupe AP-HP Hôpitaux universitaires Paris Seine-Saint-Denis." , groupe: "groupe hospitalier René-Muret-Bigottini" },
+{ nom: "Bretonneau", lat: 48.89025, lng:  2.32994, ouverture: 1901, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F19FI%2FFRAPHP075_19FI_297.jpg",  legende_image:"Entrée de l'hôpital, rue Carpeaux en 1966.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/32_Bretonneau.pdf", histoire: "En <b>1988</b>, fermeture de l'établissement ; les activités pédiatriques sont transférées à l'hôpital Robert-Debré.\n\nEn <b>2001</b>, rouvre à vocation gérontologique. Accueille également un centre d'odontologie." , groupe: "" },
+{ nom: "Brévannes (hospice de)", lat: 48.74852, lng: 2.4853, ouverture: 1885, fermeture: 1950, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F26FI%2FFRAPHP075_26FI_044.jpg",  legende_image:"Pavillon des services généraux en 1933.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/55_Emile-Roux.pdf", histoire: "En <b>1883</b>, le 19 septembre, l'Assistance publique achète au baron Hottinger une propriété à Limeil-Brévannes composée d'un château, de dépendances et d'un parc.\n\nEn <b>1885</b>, les premiers patients sont accueillis le 29 juillet, principalement des vieillards veufs, célibataires et en couple.\n\nEn <b>1896-1899</b>, création d'un quartier pour malades chroniques, suivi d'un sanatorium pour adultes tuberculeux (1907) et d'un hospice pour enfants convalescents (1908).\n\nEn <b>1950</b>, par décret du 18 octobre, l'ensemble des pavillons de Brévannes est renommé centre hospitalier Émile-Roux." , groupe: "" },
+{ nom: "Broca", lat: 48.83436, lng: 2.34740, ouverture: 1893, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FBRC%2FFRAPHP075_BRC_3FI4_0040.jpg",  legende_image:"Entrée en 1969.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/33_Broca.pdf", histoire: "En <b>1834</b>, acquis par le conseil général des hospices.\n\nEn <b>1893</b>, prend le nom d'hôpital Broca. Consultation des services spéciaux : service de gynécologie (Dr Pozzi) ; service des maladies cutanées et syphilitiques." , groupe: "groupe hospitalier Broca-La collégiale" },
+{ nom: "Chardon-Lagache", lat: 48.84499, lng: 2.26690, ouverture: 1865, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F8%2FFRAPHP075_C660_8_051.jpg",  legende_image:"L'entrée de la maison de retraite vers 1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/36_Chardon-Lagache.pdf", histoire: "En <b>1858</b>, l'Assistance publique – Hôpitaux de Paris acquiert une parcelle issue de l'ancien village d'Auteuil.\n\nEn <b>1861</b>, par acte de donation du 26 mai, les époux Chardon-Lagache fondent une maison de retraite sur cette parcelle.\n\nEn <b>1865</b>, la maison de retraite Chardon-Lagache ouvre ses portes le 24 juillet.\n\nVers <b>1960</b>, intégré au groupe hospitalier Sainte-Périne." , groupe: "groupe hospitalier Sainte Périne-Chardon-Lagache-Rossini-Parent-de-Rosan" },
+{ nom: "Charles-Foix", lat: 48.80516, lng: 2.39587, ouverture: 1901, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F22FI%2FFRAPHP075_22FI_182.jpg",  legende_image:"Entrée principale en 1976. cote 22/FI/182.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/38_Charles-Foix.pdf", histoire: "En <b>1887</b>, l'arrêté préfectoral du 29 octobre attribue à l'établissement la dénomination d'hospice d'Ivry.\n\nEn <b>1912</b>, l'établissement abrite 2 400 lits, et ne cesse de s'agrandir notamment grâce aux fondations Chemin-Delatour et Dheur.\n\nEn <b>1975</b>, renommé hôpital Charles-Foix." , groupe: "" },
+{ nom: "Chemin-Delatour", lat: 48.80516, lng: 2.39587, ouverture: 1900, fermeture: 1916, type: "retraite", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F7%2FFRAPHP075_C660_7_052.jpg",  legende_image:"Plan de masse, 1899, cote C660_7_052.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/41_Chemin-Delatour.pdf", histoire: "En <b>1891</b>, le 30 décembre, le décès de Madame Chemin-Delatour conduit l'Assistance publique, sa légataire universelle, à fonder la maison de retraite qu'elle souhaitait créer dans le département de la Seine. Un site est choisi à Ivry, les travaux confiés successivement aux architectes Vibert et Lebrun." , groupe: "" },
+{ nom: "Claude-Bernard", lat: 48.89880, lng: 2.33185, ouverture: 1904, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F23FI%2FFRAPHP075_23FI_054.jpg",  legende_image:"Entrée principale en 1963.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/43_Claude-Bernard.pdf", histoire: "Reconstruit au même emplacement d'après les plans de l'architecte François Renaud, reçoit la dénomination d'hôpital Claude-Bernard.\n\nEn <b>1988</b>, rattaché au groupe hospitalier Bichat-Claude-Bernard." , groupe: "groupe hospitalier Bichat–Claude-Bernard" },
+{ nom: "Cochin", lat: 48.83670, lng: 2.33945, ouverture: 1780, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F76FI%2FFRAPHP075_76FI_078.jpg",  legende_image:"Hôpital Cochin. Nouveau pavillon. Aquarelle signée A. Lavieille. Cote 76FI_78", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/45_Cochin.pdf", histoire: "En <b>1780</b>, l'hospice Saint-Jacques-du-Haut-Pas est fondé par Jacques-Denis Cochin pour accueillir les pauvres du faubourg Saint-Jacques à Paris.\n\nEn <b>1782</b>, construit sous la direction de Charles-François Viel, ouvre en juin avec 38 lits.\n\nEn <b>1784</b>, prend le nom d'hospice Cochin. En 1793, change deux fois de dénomination : hospice Jacques, puis hospice du Sud.\n\nEn <b>1802</b>, le conseil général des hospices lui restitue le nom d'hôpital Cochin.\n\nEn <b>1902</b>, fusionne avec l'hôpital Ricord (Cochin-Annexe). Reconstruit et étendu de 1908 à 1926.\n\nEn <b>1999</b>, le groupe hospitalier Cochin fusionne en janvier avec le groupe hospitalier Saint-Vincent-de-Paul – La Roche-Guyon." , groupe: "groupe hospitalier Cochin-Port-Royal" },
+{ nom: "Corentin-Celton", lat: 48.82817, lng: 2.27850, ouverture: 1945, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F24FI%2FFRAPHP075_24FI_141.jpg",  legende_image:"Entrée principale de l'hôpital en 1994.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/47_Corentin-Celton.pdf", histoire: "En <b>1554</b>, l'hospice des Petites Maisons est construit rue de la Chaise, sur l'emplacement d'une ancienne maladrerie dépendant de l'abbaye Saint-Germain-des-Prés. Reçoit vieillards, infirmes, mendiants, aliénés, vénériens et teigneux.\n\nEn <b>1945</b>, la maison de retraite des Ménages est renommée Corentin-Celton, en mémoire du résistant et agent du personnel hospitalier fusillé deux ans auparavant." , groupe: "" },
+{ nom: "Dheur", lat: 48.80516, lng: 2.39587, ouverture: 1891, fermeture: 1916, type: "fondation", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FD%2FD858%2FFRAPHP075_D_858_0009.jpg",  legende_image:"Fondation Dheur - Vues des bâtiments. Fin XIXe siècle", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/53_Dheur.pdf", histoire: "En <b>1891</b>, la fondation située à Ivry-sur-Seine ouvre le 25 juillet, grâce au legs d'Alexandre-Victor Dheur à l'Assistance publique, destiné à édifier une maison de retraite pour hommes et femmes indigents.\n\nEn <b>1916</b>, rattachée à l'hospice d'Ivry." , groupe: "" },
+{ nom: "Dupuytren", lat: 48.67605, lng: 2.41291, ouverture: 1904, fermeture: null, type: "hopital", detruit:"",  images:"",  legende_image:"", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/54_Dupuytren.pdf", histoire: "En <b>1967</b>, l'Assistance publique achève la construction d'un nouvel établissement à Draveil (Essonne), édifié selon les plans de MM. Degouy, Durand et Henry, destiné à l'hospitalisation des malades chroniques. L'hôpital Dupuytren entre progressivement en service dès juillet." , groupe: "groupe hospitalier Joffre-Dupuytren" },
+{ nom: "Emile-Roux", lat: 48.74852, lng: 2.4853, ouverture: 1950, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F26FI%2FFRAPHP075_26FI_254.jpg",  legende_image:"Entrée de l'hôpital en 1993.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/55_Emile-Roux.pdf", histoire: "En <b>1950</b>, le 18 octobre, l'ensemble de l'établissement et des pavillons de Brévannes change de dénomination pour devenir le centre hospitalier Émile-Roux." , groupe: "" },
+{ nom: "Enfants malades", lat: 48.84636, lng: 2.31588, ouverture: 1724, fermeture: 1927, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FNCK%2FFRAPHP075_NCK_3FI4_0339.jpg",  legende_image:"Entrée historique de l'hôpital des Enfants malades, 149, rue de Sèvres, en 1966.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/57_Enfants-Malades.pdf", histoire: "Au début du <b>XVIIIe siècle (vers 1724)</b>, la Maison de l'Enfant Jésus est fondée rue de Sèvres, à l'initiative du curé de Saint-Sulpice et grâce aux libéralités de plusieurs bienfaitrices, dont la reine Marie Leszczynska. Elle constitue l'origine directe de l'hôpital des Enfants Malades." , groupe: "groupe hospitalier Necker-Enfants malades" },
+{ nom: "Enfants-Trouvés du faubourg Saint-Antoine ", lat: 48.85003, lng: 2.37681, ouverture: 1674, fermeture: 1838, type: "hopital", detruit:"oui",  images:"",  legende_image:"", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/59_Enfants-Trouv%C3%A9s-du-faubourg-Saint-Antoine.pdf", histoire: "Dépend de l'Hôpital Général. Consultation des services spéciaux : service des maladies du larynx, nez, oreilles (Dr Lermoyez). Situé rue du Faubourg-Saint-Antoine, entre les numéros 106 et 118, à l'emplacement de l'actuel square Trousseau.\n\nEn <b>1795</b>, réuni à l'Ancien Oratoire de la rue d'Enfer.\n\nEn <b>1801</b>, la maison du faubourg est affectée aux orphelins : hospice des Orphelins de Paris, puis annexe de l'Hôtel-Dieu.\n\nEn <b>1880</b>, devient hôpital Trousseau, puis est désaffecté et démoli. Le square Trousseau occupe désormais son emplacement." , groupe: "" },
+{ nom: "Européen Georges-Pompidou", lat: 48.83890, lng:  2.27777, ouverture: 2001, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F29FI%2FFRAPHP075_29FI_377.jpg",  legende_image:"Vues extérieures des bâtiments en 2000.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/69_Georges-Pompidou.pdf", histoire: "Dans un premier temps nommé hôpital du 15e.\n\nEn <b>1992</b>, sur proposition du maire de Paris Jacques Chirac, il reçoit la dénomination d'hôpital européen Georges-Pompidou.\n\nEn <b>2001</b>, ouverture de l'établissement." , groupe: "" },
+{ nom: "Fernand Widal", lat: 48.88172, lng: 2.35848, ouverture: 1802, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F27FI%2FFRAPHP075_27FI_244.jpg",  legende_image:"Façade du bâtiment Murger et entrée principale en 1991.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/61_Fernand-Widal.pdf", histoire: "Installé dans les bâtiments de la Maison du Saint-Nom-de-Jésus, faubourg Saint-Martin.\n\nEn <b>1816</b>, transféré rue du Faubourg-Saint-Denis dans l'ancienne communauté des sœurs grises, près de la prison Saint-Lazare. Reçoit le titre de Maison royale de Santé, surnommée Maison de Santé Dubois.\n\nEn <b>1858</b>, intégralement reconstruit au 200 de la rue du Faubourg-Saint-Denis.\n\nEn <b>1959</b>, renommé hôpital Fernand-Widal." , groupe: "" },
+{ nom: "Fortin ", lat: 49.07999, lng: 1.62669, ouverture: 1890, fermeture: null, type: "fondation", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F4%2FFRAPHP075_C660_4_234.jpg",  legende_image:"Vue de la fondation Fortin vers 1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/65_Fortin.pdf", histoire: "En <b>1852</b>, l'exécution du legs de Théodore-Marie Fortin d'Ivry, destiné aux enfants pauvres des écoles congréganistes de Paris, est confiée à l'Assistance publique par arrêté du Conseil d'État du 26 juillet.\n\nEn <b>1890</b>, la fondation Fortin ouvre en décembre sur un terrain dépendant de l'hôpital de La Roche-Guyon, accueillant 28 enfants parisiens âgés de 6 à 13 ans.\n\nEn <b>1922</b>, après le départ des religieuses enseignantes, les salles de classe sont remplacées par des chambres d'isolement pour enfants convalescents cardiaques. Intégré à l'hôpital de La Roche-Guyon.\n\nEn <b>1971-1973</b>, le pavillon Fortin est transformé pour l'accueil d'enfants handicapés." , groupe: "" },
+{ nom: "Georges-Clémenceau (Sanatorium)", lat: 48.52092, lng: 2.43166, ouverture: 1918, fermeture: null, type: "sanatorium", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F28FI%2FFRAPHP075_28FI_054.jpg",  legende_image:"Entrée de l'hôpital en 1987", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/68_Georges-Clemenceau.pdf", histoire: "En <b>1918</b>, création du sanatorium Georges-Clémenceau, d'abord sous forme de baraquements à Bicêtre.\n\nEn <b>1935</b>, ouverture d'un nouvel établissement à Champcueil, dédié au traitement de la tuberculose.\n\nEn <b>1963</b>, changement d'activité : l'établissement se consacre désormais à la gérontologie." , groupe: "" },
+{ nom: "Hendaye (Sanatorium d’)", lat: 43.37596, lng: -1.75985, ouverture: 1899, fermeture: null, type: "sanatorium", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F5%2FFRAPHP075_C660_5_144.jpg",  legende_image:"Vues extérieures. - L'entrée de l'hôpital vers 1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/73_Hendaye.pdf", histoire: "En <b>1899</b>, ouverture sous la dénomination « Asile pour enfants de la ville de Paris ».\n\nEn <b>1950</b>, renommé établissement hélio-marin de la ville de Paris.\n\nEn <b>1998</b>, renommé « hôpital marin »." , groupe: "" },
+{ nom: "Henri-Mondor", lat: 48.79804, lng: 2.45182, ouverture: 1969, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F31FI%2FFRAPHP075_31FI_194.jpg",  legende_image:"Entrée de l'hôpital en 1992.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/74_Henri-Mondor.pdf", histoire: "En <b>1970</b>, fusionne avec l'hôpital Albert-Chenevier pour former le groupe hospitalier Henri-Mondor – Albert-Chenevier." , groupe: "groupe hospitalier Henri-Mondor - Albert-Chenevier" },
+{ nom: "Hôpital de la Pitié", lat: 48.84353, lng: 2.35467, ouverture: 1809, fermeture: 1912, type: "hopital", detruit:"oui",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F76FI%2FFRAPHP075_76FI_031.jpg",  legende_image:"Bâtiments de l'ancienne Pitié vers 1910.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/107_Pitié.pdf", histoire: "<b>Spécialités :</b> Neurologie.\n\nLe <b>1er janvier 1809</b>, une délibération du conseil général des hospices attribue à l'établissement de la rue Lacepède, dans le 5e arrondissement, le nom d'hôpital de la Pitié. Désormais indépendant de l'Hôtel-Dieu, il reçoit des adultes en médecine et chirurgie.\n\nEn <b>1820</b>, l'hôpital gère 433 lits. Ce chiffre monte à 616 en 1840, témoignant d'une activité en forte croissance.\n\nEn <b>1892</b>, Antony Chipault opère pour la première fois une tumeur cérébrale.\n\nEn <b>1904</b>, face au délabrement croissant des bâtiments, l'Assistance publique décide de reconstruire l'établissement sur des terrains vacants de la Salpêtrière.\n\nEn <b>novembre 1911</b>, la démolition de l'ancienne Pitié est autorisée. Elle devient effective en 1912." , groupe: "" },
+{ nom: "Hôtel-Dieu", lat: 48.85397, lng:  2.34821, ouverture: 1877, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FD%2FD807%2FFRAPHP075_D_807_0024.jpg",  legende_image:"Façade et cour intérieure Fin XIXe siècle. ", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2018/11/78_Hotel-Dieu_v1.pdf", histoire: "En <b>1867-1878</b>, reconstruction sous la conduite de l'architecte Diet, sur le côté nord du parvis Notre-Dame.\n\nEn <b>1877</b>, mis en service le 30 juillet, inauguré par Mac-Mahon le 11 août." , groupe: "" },
+{ nom: "Hôtel-Dieu (ancien)", lat: 48.85323, lng: 2.34771, ouverture: 829, fermeture: 1878, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FD%2FD807%2FFRAPHP075_D_807_0007.jpg",  legende_image:"Fin XIXe siècle.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2018/11/78_Hotel-Dieu_v1.pdf", histoire: "En <b>829</b> (IXe siècle), fondation de l'Hôtel-Dieu. Jusqu'au début du XVIe siècle, placé sous l'égide du clergé, en partie des chanoines de Notre-Dame.\n\nSous la Révolution, renommé Grand Hospice d'Humanité.\n\nEn <b>1878</b>, démolition de l'ancien Hôtel-Dieu, après la mise en service du nouvel établissement en 1877." , groupe: "" },
+{ nom: "Incurables", lat: 48.80516, lng: 2.39587, ouverture: 1637, fermeture: 1869, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC661%2F2%2FFRAPHP075_C661_2_007.jpg",  legende_image:"Plan de l'hospice en 1807.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/38_Charles-Foix.pdf", histoire: "En <b>1634-1639</b>, l'hôpital des Incurables est édifié à Paris grâce aux dons du cardinal François de La Rochefoucauld, de l'abbé François Joulet de Châtillon et de Marguerite Rouillé.\n\nEn <b>1637</b>, les lettres patentes de Louis XIII officialisent l'établissement, qui accueille ses premiers malades la même année.\n\nEn <b>1801</b>, les hommes sont transférés dans l'ancien couvent des Récollets, rue du Faubourg-Saint-Martin, transformé en maison de santé pour infirmes et vieillards, puis appelé Incurables-Hommes.\n\nEn <b>1869</b>, les malades sont réunis dans un nouvel hospice des Incurables construit à Ivry-sur-Seine par Théodore Labrouste.\n\nEn <b>1887</b>, par arrêté du 29 octobre, prend la dénomination d'hospice d'Ivry." , groupe: "" },
+{ nom: "Jean-Verdier", lat: 48.90957, lng: 2.48790, ouverture: 1920, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F36FI%2FFRAPHP075_36FI_033.jpg",  legende_image:"L'hôpital dans les années 1970.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/80_Jean-Verdier.pdf", histoire: "En <b>1970</b>, ouverture de l'hôpital de Bondy, en Seine-Saint-Denis.\n\nEn <b>1975</b>, renommé hôpital Jean-Verdier en octobre." , groupe: "" },
+{ nom: "Joffre", lat: 48.66597, lng: 2.42872, ouverture: 1932, fermeture: null, type: "sanatorium", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F76FI%2FFRAPHP075_76FI_018.jpg",  legende_image:"Sanatorium Joffre (Champrosay). Vue aérienne. Vers 1935.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/06/Joffre.pdf", histoire: "En <b>1932</b>, d'abord appelé sanatorium de Champrosay, reçoit en mars la dénomination de sanatorium Joffre, en mémoire du maréchal de France Joseph Joffre (1852-1931).\n\nEn <b>1967</b>, fusion des hôpitaux Joffre et Dupuytren sous une direction unique : création du groupe hospitalier Joffre-Dupuytren." , groupe: "groupe hospitalier Joffre-Dupuytren" },
+{ nom: "La Collégiale", lat: 48.83889, lng: 2.35235, ouverture: 1986, fermeture: null, type: "hopital", detruit:"",  images:"",  legende_image:"", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/46_Collégiale.pdf", histoire: "En <b>1977</b>, la création de l'hôpital La Collégiale est décidée dans le cadre d'une politique d'augmentation des capacités de moyen et long séjour à Paris.\n\nEn <b>1980</b>, une consultation architecturale est lancée en mai.\n\nEn <b>1986</b>, les travaux conduits par l'architecte Michel Kalisz s'achèvent et l'établissement ouvre en octobre rue du Fer-à-Moulin (5e arrondissement), à l'emplacement de l'ancienne pharmacie centrale des hôpitaux transférée à Nanterre." , groupe: "groupe hospitalier Broca-La collégiale" },
+{ nom: "La Nouvelle-Pitié", lat: 48.83635, lng:  2.36243, ouverture: 1911, fermeture: null, type: "hopital", detruit:"",  images:"",  legende_image:"", url:"", histoire: "En <b>1905</b>, les travaux de reconstruction débutent en février sous la direction de l'architecte Julien Rochet.\n\nEn <b>1911</b>, les travaux s'achèvent au printemps. La Nouvelle-Pitié, boulevard de l'Hôpital dans le 13e arrondissement, accueille ses premiers patients le 29 juin et est inaugurée le 13 mars en présence de Raymond Poincaré." , groupe: "groupe hospitalier Pitié-Salpêtrière" },
+{ nom: "La Roche-Guyon", lat: 49.07999, lng: 1.62669, ouverture: 1850, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F40FI%2FFRAPHP075_40FI_048.jpg",  legende_image:"Entrée principale de l'hôpital en 1990.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/88_La-Roche-Guyon.pdf", histoire: "En <b>1850</b>, ouverture de la maison de convalescence de La Roche-Guyon. L'hôpital adopte ensuite une vocation pédiatrique et accueille des polyhandicapés mentaux et physiques." , groupe: "" },
+{ nom: "Lariboisière", lat: 48.88283, lng: 2.35306, ouverture: 1854, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F43FI%2FFRAPHP075_43FI_0316.jpg",  legende_image:"Entrée principale en 1965.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/86_Lariboisière.pdf", histoire: "En <b>1854</b>, ouverture de l'hôpital Lariboisière, construit à l'emplacement de la léproserie appelée enclos Saint-Lazare." , groupe: "" },
+{ nom: "Louis-Mourier", lat: 48.92515, lng: 2.23646, ouverture: 1971, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F44FI%2FFRAPHP075_44FI_156.jpg",  legende_image:"Entré de l'hôpital, 1974.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/93_Louis-Mourier.pdf", histoire: "En <b>1971</b>, ouverture à Colombes dans les Hauts-de-Seine, d'abord connu sous le nom d'hôpital de Colombes, puis renommé hôpital Louis-Mourier." , groupe: "" },
+{ nom: "Lourcine", lat: 48.83436, lng: 2.34740, ouverture: 1559, fermeture: 1579, type: "hopital", detruit:"",  images:"",  legende_image:"", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/33_Broca.pdf", histoire: "En <b>1559</b>, le bâtiment, d'abord appelé Hôtel-Dieu du Patriarche puis hôpital de Saint-Martial et de Saint-Valère, est désigné sous le nom de Lourcine." , groupe: "" },
+{ nom: "Maison de Bicêtre", lat: 48.80988, lng: 2.35321, ouverture: 1656, fermeture: 1823, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F6%2FFRAPHP075_C660_6_014.jpg",  legende_image:"L'hospital de Bicestre (XVIIe siècle).", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/22_Bic%C3%AAtre.pdf", histoire: "En <b>1656</b>, rattachée à l'Hôpital Général, la Maison de Bicêtre devient un lieu d'enfermement pour les indigents, assumant à la fois la fonction d'un hôpital, d'un asile, d'une maison de correction et d'une maison de détention." , groupe: "" },
+{ nom: "Maternité de Port-Royal", lat: 48.83888, lng: 2.33750, ouverture: 1795, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FSerie_Fosseyeux%2F834FOSS%2F834FOSS_070%2FFRAPHP075_834FOSS70_1.jpg",  legende_image:"Hospice de la maternité [1811].", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/95_Maternité_de_Port-Royal.pdf", histoire: "En <b>1793-1794</b>, l'ancienne abbaye de Port-Royal est transformée en lieu de détention sous le nom de prison de Port-Libre ou prison de la Bourbe.\n\nEn <b>1795</b>, la Convention restitue l'établissement à l'administration générale des hospices, affecté aux enfants trouvés. Devient Maison de l'Allaitement.\n\nEn <b>1814</b>, transfert des services d'accouchement de l'Oratoire et de l'École d'accouchement ; prend le nom de Maternité.\n\nEn <b>1890</b>, ouverture de la clinique Baudelocque sur une partie du domaine. Rattachée à Cochin." , groupe: "groupe hospitalier Cochin-Port-Royal" },
+{ nom: "Michel-Brézin (fondation)", lat: 48.83865, lng: 2.16881, ouverture: 1833, fermeture: 1946, type: "fondation", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F45FI%2FFRAPHP075_45FI_124.jpg",  legende_image:"Cour et arcades de l'ancien hospice de la Reconnaissance vers 1960.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/110_Reconnaissance.pdf", histoire: "En <b>1828</b>, Michel Brézin formule par testament du 16 décembre un legs au Conseil général des hospices afin d'y établir un hospice de retraite à Garches.\n\nEn <b>1833</b>, l'hospice de la Reconnaissance ouvre en décembre, accueillant environ 140 pensionnaires principalement des ouvriers âgés sans ressources. Plusieurs agrandissements entre 1836 et 1843 portent la capacité à 300 lits.\n\nEn <b>1946</b>, la fondation Michel-Brézin est annexée à l'hôpital Raymond-Poincaré et devient le pavillon Brézin." , groupe: "" },
+{ nom: "Necker", lat: 48.84636, lng: 2.31588, ouverture: 1778, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FNCK%2FFRAPHP075_NCK_3FI4_0315.jpg",  legende_image:"Entrée des urgences enfants, ORL, maternité en 1999.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/99_Necker.pdf", histoire: "<b>Spécialités :</b> Pneumologie.\n\nEn <b>1778</b>, l'hôpital Necker est fondé rue de Sèvres, à l'emplacement de l'ancien couvent des Bénédictines Notre-Dame de Liesse. Il est d'abord nommé hospice de Charité, puis hospice des paroisses de Saint-Sulpice et du Gros-Caillou, et se consacre à la médecine et chirurgie de l'adulte.\n\nEn <b>1792</b>, l'établissement devient l'hospice de l'Ouest.\n\nEn <b>1802</b>, l'administration décide de lui attribuer le nom de sa fondatrice, qui l'a dirigé jusqu'en 1788 : il prend le nom d'hôpital Necker.\n\nEn <b>1819</b> René Laënnec publie le traité de l'auscultation médiate où il décrit toute la sémiologie pulmonaire. La tuberculose y est définie comme entité unique, et sa classification des bruits respiratoires est encore utilisée aujourd'hui.\n\nEn <b>1927</b>, l'hôpital Necker fusionne avec l'hôpital des Enfants malades, fondé en 1802 dans le même quartier, pour former l'hôpital Necker-Enfants Malades.\n\nParmi les services spécialisés, on compte notamment le service des Maladies des voies urinaires, animé par le Pr Guyon et le Dr Routier." , groupe: "groupe hospitalier Necker-Enfants malades" },
+{ nom: "Notre-Dame-de-Pitié", lat: 48.84353, lng: 2.35467, ouverture: 1612, fermeture: 1809, type: "hopital", detruit:"",  images:"",  legende_image:"", url:"", histoire: "En <b>1612</b>, fondée sous la régence de Marie de Médicis, la maison dite Pitié ou Notre-Dame-de-Pitié s'établit faubourg Saint-Victor pour accueillir mendiants et vieillards, en application de l'édit royal du 27 avril 1612.\n\nEn <b>1657</b>, rattaché à l'Hôpital Général, prend par délibération du 7 mai le nom de Notre-Dame-de-Pitié. Refuge pour enfants mendiants, trouvés et orphelins.\n\nEn <b>1792</b>, devient orphelinat Saint-Victor, puis maison de la Patrie sous la Révolution.\n\nEn <b>1803</b>, prend le nom d'hospice des Orphelins.\n\nEn <b>1808</b>, les enfants sont transférés et l'établissement devient annexe de l'Hôtel-Dieu." , groupe: "" },
+{ nom: "Parent-de-Rosan (Orphelinat)", lat: 48.84286, lng: 2.26674, ouverture: 1895, fermeture: 1962, type: "orphelinat", detruit:"",  images:"",  legende_image:"", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/100_Parent-de-Rosan.pdf", histoire: "En <b>1890</b>, décès de Charles-Félix Parent le 8 février, dont le testament prévoyait la création d'un orphelinat avec les revenus de ses biens.\n\nEn <b>1895</b>, l'orphelinat ouvre ses portes dans la propriété du bienfaiteur dans le 16e arrondissement de Paris, sous le nom de fondation Parent-de-Rosan.\n\nEn <b>1962</b>, à compter du 1er janvier, l'établissement cesse de relever de l'Assistance publique et est rattaché au bureau d'aide sociale à l'enfance." , groupe: "groupe hospitalier Sainte Périne-Chardon-Lagache-Rossini-Parent-de-Rosan" },
+{ nom: "Paul-Brousse", lat: 48.79507, lng: 2.36372, ouverture: 1913, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FPBR%2FFRAPHP075_PBR_3FI4_0278.jpg",  legende_image:"Entrée principale en 1992.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/101_Paul-Brousse.pdf", histoire: "En <b>1913</b>, l'hospice départemental de Villejuif, également appelé hospice départemental Paul-Brousse, entre en service." , groupe: "" },
+{ nom: "Paul-Doumer", lat: 49.35320, lng: 2.49542, ouverture: 1933, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FVPD%2FFRAPHP075_VPD_3FI4_009.jpg",  legende_image:"Entrée de l'hôpital en 1977.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/102_Paul-Doumer.pdf", histoire: "En <b>1932</b>, le sanatorium Labruyère ouvre.\n\nEn <b>1933</b>, reçoit la dénomination de sanatorium Paul-Doumer." , groupe: "groupe hospitalier Villemin-Paul-Doumer" },
+{ nom: "Petites Maisons (Hospice des)", lat: 48.82817, lng: 2.27850, ouverture: 1554, fermeture: 1945, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC661%2F2%2FFRAPHP075_C661_2_010.jpg",  legende_image:"Plan des Petites-Maisons (Ménages), 1790.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/47_Corentin-Celton.pdf", histoire: "En <b>1554</b>, construction de l'hospice des Petites Maisons à l'emplacement d'une ancienne maladrerie.\n\nEn <b>1863</b>, reconstruction d'un hospice plus vaste, ouvert à Issy.\n\nEn <b>1945</b>, la maison de retraite des Ménages est renommée Corentin-Celton." , groupe: "" },
+{ nom: "Port-Hallan", lat: 47.34576, lng: -3.15294, ouverture: 1893, fermeture: 1903, type: "ecole", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC661%2F2%2FFRAPHP075_C661_2_077.jpg",  legende_image:"Vue extérieure de l'école vers 1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/4_port-hallan.pdf", histoire: "En <b>1893</b>, l'école maritime de Port-Hallan est fondée par le conseil général de la Seine.\n\nEn <b>1894</b>, ouverture le 14 février à Le Palais. Forme aux métiers maritimes les enfants assistés du département, prévue pour soixante élèves.\n\nEn <b>1903</b>, fermeture de l'établissement, dont les résultats ont été jugés insuffisants." , groupe: "" },
+{ nom: "Raymond-Poincaré", lat: 48.83947, lng:  2.17079, ouverture: 1936, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F45FI%2FFRAPHP075_45FI_244.jpg",  legende_image:"Entrée principale en 1977.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/109_Raymond-Poincaré.pdf", histoire: "En <b>1936</b>, ouverture de l'hôpital-hospice Raymond-Poincaré à Garches, d'abord consacré aux soins des adultes chroniques.\n\nEn <b>1944-1945</b>, transféré temporairement sous le nom d'hôpital Poincaré-Foch en raison d'une réquisition allemande.\n\nAprès <b>1945</b>, changement d'activité : centre de rééducation pour patients de chirurgie osseuse, puis centre de traitement pour personnes atteintes de poliomyélite, avant de s'élargir aux soins des paraplégiques." , groupe: "" },
+{ nom: "Reconnaissance (la)", lat: 48.83865, lng: 2.16881, ouverture: 1833, fermeture: 1946, type: "fondation", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F45FI%2FFRAPHP075_45FI_126.jpg",  legende_image:"Arcades dans les années 1960.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/110_Reconnaissance.pdf", histoire: "En <b>1833</b>, ouverture de l'hospice de la Reconnaissance à Garches, maison de retraite destinée aux ouvriers forgerons-serruriers-mécaniciens sexagénaires sans ressources.\n\nEn <b>1946</b>, les bâtiments sont annexés à l'hôpital Raymond-Poincaré et deviennent le pavillon Brézin." , groupe: "" },
+{ nom: "René-Muret", lat: 48.93596, lng: 2.50974, ouverture: 1937, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FRMB%2FFRAPHP075_RMB_3FI4_160.jpg",  legende_image:"Entrée principale en 1967.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/111_René-Muret.pdf", histoire: "En <b>1964</b>, début de l'édification de l'hôpital de Sevran en octobre.\n\nEn <b>1967</b>, l'établissement reçoit par arrêté le nom d'hôpital René-Muret.\n\nEn <b>1970</b>, par arrêté ministériel du 20 août, rattachement de la maison de retraite Bigottini. Les deux établissements, topographiquement séparés, sont administrativement liés sous la dénomination d'hôpital René-Muret – Bigottini." , groupe: "groupe hospitalier René-Muret-Bigottini" },
+{ nom: "Robert-Debré", lat: 48.87883, lng: 2.40318, ouverture: 1988, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FRDB%2FFRAPHP075_RDB_3FI4_0253.jpg",  legende_image:" Entrée principale, boulevard Sérurier en 1988.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/114_Robert-Debré.pdf", histoire: "En <b>1988</b>, inauguration de l'hôpital Robert-Debré, 19e arrondissement de Paris." , groupe: "" },
+{ nom: "Rothschild", lat: 48.84305, lng: 2.39836, ouverture: 1852, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FRTH%2FFRAPHP075_RTH_3FI4_0041.jpg",  legende_image:"Entrée de la fondation Rothschild en 1991.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/116_Rothschild.pdf", histoire: "En <b>1852</b>, fondation rue de Picpus dans le 12e arrondissement.\n\nEn <b>1914</b>, transfert et ouverture du nouvel hôpital rue Santerre, comprenant hôpital, hospice, orphelinat, sanatorium et maison de convalescence à Chantilly.\n\nEn <b>1954</b>, rattachement à l'Assistance publique." , groupe: "" },
+{ nom: "Roudil (école)", lat: 36.21721, lng: 2.87913, ouverture: 1887, fermeture: 1962, type: "ecole", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F9%2FFRAPHP075_C660_9_184.jpg",  legende_image:"Cour de la ferme vers 1900.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/5_roudil.pdf", histoire: "En <b>1887</b>, legs consenti par l'abbé Roudil au département pour la création d'une colonie d'enfants assistés sur un domaine à Ben-Chicao (Algérie), avec ferme-école destinée à l'instruction professionnelle agricole.\n\nEn <b>1893</b>, les travaux s'achèvent en janvier, permettant la mise en exploitation du domaine.\n\nEn <b>1910</b>, l'école Roudil réouvre en avril après réorganisation.\n\nEn <b>1962</b>, fermeture de l'établissement, liée au déclin de la viticulture algérienne." , groupe: "" },
+{ nom: "Saint-Antoine", lat: 48.84923, lng: 2.38273, ouverture: 1795, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FSAT%2FFRAPHP075_SAT_3FI4_0136.jpg",  legende_image:"Entrée principale en 1989.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/117_Saint-Antoine.pdf", histoire: "En <b>1795</b>, ouverture sous le nom d'hospice du faubourg Saint-Antoine, puis hospice de l'Humanité du faubourg Saint-Antoine.\n\nEn <b>1796</b>, renommé hospice de l'Est.\n\nEn <b>1802</b>, prend le nom d'hôpital Saint-Antoine." , groupe: "" },
+{ nom: "Sainte-Périne", lat: 48.84486, lng: 2.26685, ouverture: 1807, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F47FI%2FFRAPHP075_47FI_166.jpg",  legende_image:"Entrée de l'hôpital, 1991.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/121_Sainte-Périne.pdf", histoire: "En <b>1807</b>, l'institution Notre-Dame de la Paix, implantée rue de Chaillot dans les bâtiments de l'ancien couvent de Sainte-Périne, est intégrée au domaine de l'Assistance publique avec pour mission d'assister les personnes indigentes, anciens fonctionnaires et veuves d'employés. \n\nEn <b>1860</b>, expropriée, ses pensionnaires sont provisoirement hébergés dans la villa de la Réunion, près de l'avenue de Versailles. \n\nEn <b>1865</b>, l'établissement s'installe définitivement rue Chardon-Lagache, dans le quartier d'Auteuil, où il devient un hôpital spécialisé en gérontologie." , groupe: "groupe hospitalier Sainte Périne-Chardon-Lagache-Rossini-Parent-de-Rosan" },
+{ nom: "Saint-Louis", lat: 48.87344, lng: 2.36767, ouverture: 1612, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FCND%2FFRAPHP075_CND_0191_0001.jpg",  legende_image:"Plan du royal et somptueux édifice de l'hospital de St-Louis vers 1681.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/127_Saint-Louis.pdf", histoire: "En <b>1612</b>, fondé sur décision de Henri IV, conçu comme un sanitat rattaché à l'Hôtel-Dieu de Paris, destiné à l'accueil et à l'isolement des personnes atteintes de la peste.\n\nEn <b>1773</b>, reçoit une affectation permanente sous le nom de Saint-Louis.\n\nAu cours du <b>XVIIIe siècle</b>, l'établissement s'oriente vers le traitement des maladies syphilitiques et des affections cutanées.\n\nSous la Révolution, provisoirement rebaptisé hospice du Nord. Accueille les consultations des services spéciaux, notamment le service des maladies cutanées et syphilitiques." , groupe: "" },
+{ nom: "Salpêtrière (Hospice de la)", lat: 48.83891, lng:  2.36727, ouverture: 1657, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F76FI%2FFRAPHP075_76FI_068.jpg",  legende_image:"L'Hôpital de la Salpêtrière, XVIIIe s.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/131_Salpêtrière.pdf", histoire: "En <b>1657</b>, installée dans le quartier Saint-Victor, lieu d'assistance et refuge pour indigentes et infirmes, en particulier femmes aliénées, hystériques, paralytiques et incurables.\n\nEn <b>1794</b>, apparition des services de neurologie ; l'hôpital se spécialise dans le domaine neuropsychiatrique.\n\nEn <b>1823</b>, renommé hospice de la Vieillesse-Femmes.\n\nEn <b>1885</b>, renommé hospice de la Salpêtrière.\n\nEn <b>1964</b>, fusion avec l'hôpital de la Pitié." , groupe: "groupe hospitalier Pitié-Salpêtrière" },
+{ nom: "San Salvadour", lat: 43.08465, lng: 6.11162, ouverture: 1905, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FSSL%2FFRAPHP075_SSL_3FI4_067.jpg",  legende_image:"Entrée de l'hôpital en 1993.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/06/San-Salvadour.pdf", histoire: "En <b>1905</b>, le château est transformé en sanatorium pour enfants.\n\nEn <b>1922</b>, acquisition de la propriété par la ville de Paris.\n\nEn <b>1924</b>, remise à l'Assistance publique.\n\nEn <b>1960</b>, conversion en hôpital destiné aux soins des jeunes polyhandicapés." , groupe: "" },
+{ nom: "Tenon", lat: 48.86594, lng: 2.40098, ouverture: 1878, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F53FI%2FFRAPHP075_53FI_476.jpg",  legende_image:"Entrée principale en 1989.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/06/Tenon.pdf", histoire: "En <b>1878</b>, ouverture dans le 20e arrondissement, d'abord sous le nom d'hôpital de Ménilmontant.\n\nEn <b>1879</b>, renommé hôpital Tenon en hommage au chirurgien Jacques Tenon." , groupe: "" },
+{ nom: "Vaugirard-Gabriel-Pallez", lat: 48.83445, lng:  2.29401, ouverture: 1921, fermeture: null, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2F56FI%2FFRAPHP075_56FI_093.jpg",  legende_image:"Entrée de l'hôpital en 1992.", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2024/06/Vaugirard-Gabriel-Pallez.pdf", histoire: "En <b>1920</b>, la Faculté de médecine de Paris acquiert un domaine dans le 15e arrondissement.\n\nEn <b>1921</b>, mis à la disposition de l'Assistance publique par convention : devient la clinique chirurgicale Vaugirard, puis hôpital de Vaugirard.\n\nEn <b>1966</b>, rattaché au groupe hospitalier Necker-Enfants-Malades-Laennec.\n\nEn <b>1986</b>, rattaché au groupe hospitalier Boucicaut-Vaugirard, renonce aux interventions chirurgicales.\n\nEn <b>1999</b>, prend l'appellation d'hôpital Vaugirard-Gabriel-Pallez." , groupe: "" },
+{ nom: "Vieillesse-Hommes (Hospice de la)", lat: 48.80988, lng: 2.35321, ouverture: 1823, fermeture: 1885, type: "hopital", detruit:"",  images:"https://aphp-diffusion-prod.ligeo-archives.com/cgi-bin/iipsrv.fcgi?FIF=%2Fhome%2Fhttpd%2Faphp%2Fdiffusion%2Fprod%2Fapp%2Fwebroot%2Fdata%2Ffiles%2Faphp.diffusion%2Fimages%2FPHOTOTHEQUE%2FC660%2F6%2FFRAPHP075_C660_6_015.jpg",  legende_image:"L'hospice de Bicêtre (commencement du XIXe siècle).", url:"https://blogs.aphp.fr/wp-content/blogs.dir/113/files/2013/04/22_Bic%C3%AAtre.pdf", histoire: "En <b>1823</b>, par arrêté du 4 juin, le conseil général des hospices attribue à la maison de Bicêtre le nom d'hospice de la Vieillesse-Hommes." , groupe: "" },
+
+];
+const searchIndex = etablissements.map(e => ({
+  ...e,
+  _search: normalize(e.nom)
+}));
+
+/* =========================
+   Carte
+   ========================= */
+
+const map = L.map("map").setView([48.8566, 2.3522], 12);
+const legend = L.control({ position: 'bottomright' });
+
+legend.onAdd = function () {
+  const div = L.DomUtil.create('div', 'legend');
+  div.innerHTML = `
+    <div style="background:white;padding:8px;border-radius:5px;box-shadow:0 0 5px rgba(0,0,0,0.3);font-size:14px;">
+      <div style="margin-bottom:3px;font-size:11px;color:#888;font-style:italic;">Cliquer pour filtrer</div>
+      <div id="leg-actif" data-filtre="actif" style="cursor:pointer;padding:3px 5px;border-radius:4px;transition:background 0.2s;">
+        <span style="display:inline-block;width:12px;height:12px;background:blue;border-radius:50%;margin-right:6px;"></span>
+        Établissement en activité
+      </div>
+      <div id="leg-ferme" data-filtre="ferme" style="cursor:pointer;padding:3px 5px;border-radius:4px;margin-top:3px;transition:background 0.2s;">
+        <span style="display:inline-block;width:12px;height:12px;background:red;border-radius:50%;margin-right:6px;"></span>
+        Ancien établissement AP-HP
+      </div>
+      <div id="leg-detruit" data-filtre="detruit" style="cursor:pointer;padding:3px 5px;border-radius:4px;margin-top:3px;transition:background 0.2s;">
+        <span style="display:inline-block;width:12px;height:12px;background:black;border-radius:50%;margin-right:6px;"></span>
+        Établissement détruit/rasé
+      </div>
+    </div>
+  `;
+
+  // Gestion des clics APRÈS insertion dans le DOM
+  setTimeout(() => {
+    ["leg-actif","leg-ferme","leg-detruit"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("mouseenter", () => {
+        if (!el.classList.contains("leg-actif-on")) el.style.background = "#f0f0f0";
+      });
+      el.addEventListener("mouseleave", () => {
+        if (!el.classList.contains("leg-actif-on")) el.style.background = "";
+      });
+      el.addEventListener("click", () => {
+        const filtre = el.dataset.filtre;
+        // Toggle : si déjà actif on réinitialise, sinon on active
+        if (filtreStatut === filtre) {
+          filtreStatut = null;
+          el.style.background = "";
+          el.style.outline = "";
+        } else {
+          filtreStatut = filtre;
+          // Réinitialiser les autres
+          ["leg-actif","leg-ferme","leg-detruit"].forEach(otherId => {
+            const other = document.getElementById(otherId);
+            if (other) { other.style.background = ""; other.style.outline = ""; }
+          });
+          el.style.background = "#e0eaff";
+          el.style.outline = "2px solid #4a90d9";
+        }
+updateMap(
+  parseInt(document.getElementById("yearStart").value),
+  parseInt(document.getElementById("yearSlider").value)
+);
+      });
+    });
+  }, 300);
+
+  return div;
+};
+
+legend.addTo(map);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a> | &copy; DPC, François Méril',
+  subdomains: "abcd",
+  maxZoom: 19
+}).addTo(map);
+
+// ← Remplacement ici
+const markersLayer = L.markerClusterGroup({
+  maxClusterRadius: 30,          // rayon plus petit → plus de points visibles
+  spiderfyOnMaxZoom: true,       // éclatement clusters au zoom max
+  showCoverageOnHover: false     // pas de zone grisée au survol
+});
+map.addLayer(markersLayer);
+const markersIndex = Object.create(null);
+// === Icônes goutte (pins) ===
+const iconBleu = L.icon({
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const iconRouge = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const iconNoir = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-black.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+// affiche le nom de l'établissement uniquement
+function buildPopupHtml(e) {
+  let html = `<strong>${e.nom}</strong>`;
+
+  if (e.images) {
+    html += `
+      <img
+        src="${e.images}"
+        alt="${e.nom}"
+        class="popup-image"
+        onclick="openImageOverlay('${e.images}', '${e.nom}')"
+      >
+      <div class="popup-image-caption">
+        ${e.legende_image || ""}
+      </div>
+    `;
+  }
+
+  return html;
+}
+function createMarker(e, couleur) {
+
+// Choix de l’icône (ordre IMPORTANT)
+let icon = iconBleu; // ouvert par défaut
+
+// détruit → PRIORITAIRE
+if ((e.detruit || "").toLowerCase() === "oui") {
+  icon = iconNoir;
+}
+// musée
+else if ((e.type || "").toLowerCase() === "musée") {
+  icon = iconViolet;
+}
+// fermé
+else if (couleur === "red") {
+  icon = iconRouge;
+}
+
+  const marker = L.marker([e.lat, e.lng], {
+    icon: icon
+  });
+
+  marker
+    .on("click", () => afficherInfos(e))
+    .bindPopup(buildPopupHtml(e))
+    .bindTooltip(e.nom, {
+      direction: "top",
+      offset: [0, -20],
+      opacity: 0.9
+    });
+
+  return marker;
+}
+
+etablissements.forEach(e => {
+  // créer une icône bleu pour les établissements ouverts
+  let icon;
+  if (e.type === "musée") {
+    icon = L.divIcon({ className: 'square-marker', html: '', iconSize: [14,14], bgColor: 'purple' });
+  } else if (e.fermeture && e.fermeture < 2026) {
+    icon = L.divIcon({ className: 'square-marker', html: '', iconSize: [14,14], bgColor: 'red' });
+  } else {
+    icon = L.divIcon({ className: 'square-marker', html: '', iconSize: [14,14], bgColor: 'blue' });
+  }
+
+  const marker = L.marker([e.lat, e.lng], { icon: icon });
+ marker.bindPopup(`<strong>${e.nom}</strong>`, {
+  maxWidth: null,
+  offset: [0,12]
+});
+marker.on('popupopen', function () {
+  this.closeTooltip();
+});
+  marker.addTo(markersLayer);       // <-- ça le met sur la carte
+  markersIndex[normalize(e.nom)] = marker;  // <-- ça l’ajoute à l’index pour la recherche
+});
+
+const input = document.getElementById("searchInput");
+const resultsBox = document.getElementById("searchResults");
+
+input.addEventListener("input", () => {
+  const q = input.value.trim().toLowerCase(); // texte tapé en minuscules
+
+// Minimum 3 lettres pour lancer la recherche
+  if (q.length < 3) {
+    resultsBox.style.display = "none";
+    return;
+  }
+  // Filtrage des établissements
+  const matches = searchIndex
+    .filter(e => e.nom.toLowerCase().includes(q))
+    .slice(0, 10); // limite à 10 résultats maximum
+
+  renderResults(matches); // affiche la liste
+});
+function renderResults(list) {
+  resultsBox.innerHTML = "";
+
+  if (!list.length) {
+    resultsBox.style.display = "none";
+    return;
+  }
+
+  list.forEach(e => {
+    const div = document.createElement("div");
+    div.textContent = e.nom;
+    div.className = "search-result";
+
+    div.addEventListener("click", () => selectEtablissement(e));
+
+    resultsBox.appendChild(div);
+  });
+
+  resultsBox.style.display = "block";
+}
+
+
+/* =========================
+   Panneau d'information (clic établissement)
+   ========================= */
+
+function afficherInfos(e) {
+
+  /* =========================
+     1. Chronologie du site (mêmes coordonnées)
+     ========================= */
+
+  const site = etablissements
+    .filter(x => x.lat === e.lat && x.lng === e.lng)
+    .sort((a, b) => a.ouverture - b.ouverture);
+	if (site.length === 0) {
+  document.getElementById("sidepanel").innerHTML =
+    "<p>Aucune information disponible pour ce site.</p>";
+  return;
+}
+
+  let chronoHtml = "";
+
+ site.forEach(s => {
+  chronoHtml += `
+    <div style="margin-bottom:12px; padding-left:8px; border-left:3px solid #888;">
+      <strong>${s.nom}</strong><br>
+	  ${s.ouverture} – ${s.fermeture ?? "aujourd’hui"}<br><br>
+      ${s.histoire ? s.histoire.replace(/\n/g, "<br>") : ""}
+      ${s.url ? `<br><a href="${s.url}" target="_blank">Accéder à la fiche détaillée</a>` : ""}
+    </div>
+  `;
+});
+  
+  /* =========================
+   Lien vers document (si présent)
+   ========================= */
+
+let lienHtml = "";
+
+if (e.url) {
+  lienHtml = `
+    <hr>
+    <p>
+      <a href="${e.url}" target="_blank">
+        Accéder à la fiche détaillée
+      </a>
+    </p>
+  `;
+}
+
+  /* =========================
+     2. Informations de groupe (si applicable)
+     ========================= */
+
+  let groupeHtml = "";
+
+  if (e.groupe) {
+    const autresSites = etablissements.filter(x =>
+      x.groupe === e.groupe &&
+      x.nom !== e.nom
+    );
+
+    if (autresSites.length > 0) {
+      groupeHtml += `
+        <hr>
+        <strong>${e.groupe}</strong>
+        <ul>
+      `;
+
+      autresSites.forEach(s => {
+        groupeHtml += `
+          <li>
+            ${s.nom}<br>
+            <small>${s.ouverture} – ${s.fermeture ?? "aujourd’hui"}</small>
+          </li>
+        `;
+      });
+
+      groupeHtml += "</ul>";
+    }
+  }
+
+  /* =========================
+     3. Affichage panneau droit
+     ========================= */
+
+  document.getElementById("sidepanel").innerHTML = `
+    <h3>Site hospitalier</h3>
+    <p><em>${site[site.length - 1].nom}</em></p>
+
+    <h4>Historique du site</h4>
+    ${chronoHtml}
+
+    ${groupeHtml}
+
+  `;
+}
+
+
+
+/* =========================
+   Filtre statut (légende cliquable)
+   ========================= */
+let filtreStatut = null; // null = tout afficher | "actif" | "ferme" | "detruit"
+
+/* =========================
+   Fonction de filtrage
+   ========================= */
+
+function updateMap(yearBegin, year) {
+  if (yearBegin === undefined) yearBegin = 829;
+  markersLayer.clearLayers();
+
+  // Récupère la valeur du filtre type sélectionné
+  const typeSelectionne = document.getElementById("typeFilter")
+    ? document.getElementById("typeFilter").value
+    : "";
+
+  for (let i = 0; i < etablissements.length; i++) {
+    const e = etablissements[i];
+    const type = (e.type || "").toLowerCase().trim();
+    const ouverture = Number(e.ouverture);
+    const fermeture = e.fermeture !== null && e.fermeture !== ""
+      ? Number(e.fermeture)
+      : Infinity;
+
+    // Filtre par statut (légende cliquable)
+    if (filtreStatut !== null) {
+      const estDetruit = (e.detruit || "").toLowerCase() === "oui";
+      const ouvertureNum = Number(e.ouverture);
+      const fermetureNum = e.fermeture !== null && e.fermeture !== "" ? Number(e.fermeture) : Infinity;
+      const estFerme = year >= fermetureNum;
+      const estActif = !estFerme && !estDetruit;
+      if (filtreStatut === "actif"   && !estActif)   continue;
+      if (filtreStatut === "ferme"   && (!estFerme || estDetruit)) continue;
+      if (filtreStatut === "detruit" && !estDetruit) continue;
+    }
+
+    // Filtre par type (comparaison normalisée : sans accent, minuscules)
+    if (typeSelectionne !== "") {
+      const typeNorm = type
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase().trim();
+      const typesConnus = ["hopital", "fondation", "ecole", "musee", "orphelinat", "retraite", "sanatorium"];
+      if (typeSelectionne === "autre") {
+        if (typesConnus.includes(typeNorm)) continue;
+      } else {
+        if (typeNorm !== typeSelectionne) continue;
+      }
+    }
+
+    // Déterminer si l'établissement doit être visible
+const ouvert = ouverture <= year && (e.fermeture === null || e.fermeture === "" || Number(e.fermeture) >= yearBegin);
+    const ferme = year >= fermeture;
+
+    if (ouvert) {
+      let couleur = "blue"; // par défaut : actif
+
+      if (ferme) {
+        couleur = "red";
+      }
+
+      if (e.type === "musée") {
+        couleur = COULEUR_MUSEE;
+      }
+
+      const marker = createMarker(e, couleur);
+      marker.addTo(markersLayer);
+      markersIndex[normalize(e.nom)] = marker;
+      markersIndex[e.nom.trim().toLowerCase()] = marker;
+    }
+  }
+
+    // Mise à jour de la notice des ouvertures
+  document.getElementById("notice-year").textContent = year;
+
+  const ouvertures = etablissements.filter(e => e.ouverture === year);
+  const noticeContent = document.getElementById("notice-content");
+
+  if (ouvertures.length === 0) {
+    noticeContent.textContent = "Aucune ouverture";
+  } else {
+    noticeContent.innerHTML = ouvertures
+      .map(e => `• <strong>${e.nom}</strong>`)
+      .join("<br>");
+  }
+}
+
+
+/* =========================
+   Timeline
+   ========================= */
+
+const slider = document.getElementById("yearSlider");
+const label = document.getElementById("yearLabel");
+const sliderStart = document.getElementById("yearStart");
+const labelStart = document.getElementById("labelStart");
+
+// Écouteur filtre type
+document.getElementById("typeFilter").addEventListener("change", () => {
+  updateMap(parseInt(sliderStart.value), parseInt(slider.value));
+});
+
+// Curseur de fin → met à jour le champ texte
+slider.addEventListener("input", () => {
+  let yearEnd = parseInt(slider.value);
+  let yearBegin = parseInt(sliderStart.value);
+  if (yearEnd < yearBegin) { yearEnd = yearBegin; slider.value = yearEnd; }
+  label.value = yearEnd;
+  updateMap(yearBegin, yearEnd);
+});
+
+// Champ texte de fin → met à jour le curseur
+label.addEventListener("change", () => {
+  let yearEnd = Math.min(2026, Math.max(829, parseInt(label.value) || 2026));
+  let yearBegin = parseInt(sliderStart.value);
+  if (yearEnd < yearBegin) { yearEnd = yearBegin; }
+  label.value = yearEnd;
+  slider.value = yearEnd;
+  updateMap(yearBegin, yearEnd);
+});
+
+// Curseur de début → met à jour le champ texte
+sliderStart.addEventListener("input", () => {
+  let yearBegin = parseInt(sliderStart.value);
+  let yearEnd = parseInt(slider.value);
+  if (yearBegin > yearEnd) { yearBegin = yearEnd; sliderStart.value = yearBegin; }
+  labelStart.value = yearBegin;
+  updateMap(yearBegin, yearEnd);
+});
+
+// Champ texte de début → met à jour le curseur
+labelStart.addEventListener("change", () => {
+  let yearBegin = Math.min(2026, Math.max(829, parseInt(labelStart.value) || 829));
+  let yearEnd = parseInt(slider.value);
+  if (yearBegin > yearEnd) { yearBegin = yearEnd; }
+  labelStart.value = yearBegin;
+  sliderStart.value = yearBegin;
+  updateMap(yearBegin, yearEnd);
+});
+
+/* Initialisation */
+updateMap(parseInt(sliderStart.value), parseInt(slider.value));
+const searchInput = document.getElementById("searchInput");
+const searchResults = document.getElementById("searchResults");
+
+searchInput.addEventListener("input", () => {
+  const query = searchInput.value.trim().toLowerCase();
+  searchResults.innerHTML = "";
+
+  if (query.length < 2) {
+    searchResults.style.display = "none";
+    return;
+  }
+
+  const matches = etablissements.filter(e =>
+    e.nom.toLowerCase().includes(query)
+  );
+
+  if (matches.length === 0) {
+    searchResults.style.display = "none";
+    return;
+  }
+
+  matches.forEach(e => {
+    const item = document.createElement("div");
+    item.textContent = e.nom;
+    item.style.padding = "6px";
+    item.style.cursor = "pointer";
+
+    item.addEventListener("click", () => {
+      const marker = markersIndex[e.nom.trim().toLowerCase()];
+      if (!marker) return;
+
+      map.setView(marker.getLatLng(), 15);
+      marker.openPopup();
+
+      searchResults.style.display = "none";
+      searchInput.value = e.nom;
+    });
+
+    item.addEventListener("mouseenter", () => item.style.background = "#eee");
+    item.addEventListener("mouseleave", () => item.style.background = "white");
+
+    searchResults.appendChild(item);
+  });
+
+  const rect = searchInput.getBoundingClientRect();
+  searchResults.style.left = rect.left + "px";
+  searchResults.style.top = rect.bottom + "px";
+  searchResults.style.width = rect.width + "px";
+  searchResults.style.display = "block";
+});
+function selectEtablissement(e) {
+  const marker = markersIndex[normalize(e.nom)];
+  if (!marker) return;
+
+  map.setView(marker.getLatLng(), 14, { animate: true });
+  marker.openPopup();
+
+  resultsBox.style.display = "none";
+}
+function openImageOverlay(src, alt) {
+  const overlay = document.getElementById("imageOverlay");
+  const img = document.getElementById("overlayImage");
+
+  img.src = src;
+  img.alt = alt;
+
+  overlay.style.display = "flex";
+}
+
+function closeImageOverlay() {
+  document.getElementById("imageOverlay").style.display = "none";
+}
+
+</script>
+<div id="imageOverlay" class="image-overlay" onclick="closeImageOverlay()">
+  <img id="overlayImage" src="" alt="">
+</div>
+</body>
+</html>
