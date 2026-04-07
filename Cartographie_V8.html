@@ -788,7 +788,7 @@ function createMarker(e, couleur) {
 let icon = iconBleu; // ouvert par défaut
 
 // détruit → PRIORITAIRE
-if ((e.detruit || "").toLowerCase() === "oui") {
+if ((e.detruit || "").toLowerCase() === "oui" && couleur === "red") {
   icon = iconNoir;
 }
 // musée – désactivé, discussions en cours
