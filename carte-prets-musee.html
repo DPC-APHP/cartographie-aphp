@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Les œuvres du musée de l'AP-HP en voyage</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+/* ===== COULEURS : à remplacer par celles du site du musée ===== */
+:root{
+  --bleu:#1b3a6b;      /* bandeau et titres */
+  --accent:#FFD000;    /* expositions en cours */
+  --avenir:#00A255;    /* expositions à venir */
+  --passe:#5BC5F2;     /* expositions passées */
+  --fond:#f6f3ee;      /* fond du panneau */
+  --texte:#222;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--texte)}
+body{display:flex;flex-direction:column}
+header{background:var(--bleu);color:#fff;padding:14px 20px}
+header h1{margin:0 0 4px;font-size:22px}
+header p{margin:0;font-size:14px;line-height:1.4;max-width:900px;opacity:.95}
+main{flex:1;display:flex;min-height:0}
+#map{flex:1}
+aside{width:340px;background:var(--fond);display:flex;flex-direction:column;border-left:1px solid #ddd}
+.filtres{display:flex;gap:6px;padding:10px}
+.filtres button{flex:1;padding:7px 2px;border:1px solid var(--bleu);background:#fff;color:var(--bleu);cursor:pointer;border-radius:4px;font-size:13px}
+.filtres button.actif{background:var(--bleu);color:#fff}
+#liste{overflow-y:auto;padding:0 10px 10px;flex:1}
+.item{display:flex;gap:10px;background:#fff;border-left:5px solid var(--passe);padding:8px;margin-bottom:8px;cursor:pointer;border-radius:3px}
+.item.encours{border-left-color:var(--accent)}
+.item.avenir{border-left-color:var(--avenir)}
+.item:hover{box-shadow:0 1px 6px rgba(0,0,0,.25)}
+.item img{width:64px;height:64px;object-fit:cover;border-radius:3px;flex:none}
+.item b{font-size:14px;display:block;margin-bottom:2px}
+.item small{display:block;color:#555;font-size:12px;line-height:1.35}
+.badge{font-size:11px;font-weight:bold;color:var(--passe)}
+.encours .badge{color:var(--accent)}
+.avenir .badge{color:var(--avenir)}
+.expo{font-style:italic;color:#333}
+.popup img{width:100%;max-height:150px;object-fit:cover;border-radius:3px;margin-bottom:6px}
+.popup b{font-size:15px}
+@media (max-width:760px){main{flex-direction:column}aside{width:100%;height:40%}#map{height:60%}}
+.num{background:#fff;border:2px solid var(--bleu);color:var(--bleu);border-radius:50%;font:bold 11px Arial;text-align:center;line-height:18px;width:22px!important;height:22px!important;padding-top:1px}
+.popup ol{margin:6px 0 0;padding-left:20px;font-size:12px}
+.popup li{cursor:pointer;margin-bottom:3px}.popup li:hover{text-decoration:underline}
+.nb{float:right;font-size:11px;color:#555}
+.popup img.zoomable{cursor:zoom-in}
+.popup a{display:inline-block;margin-top:6px;color:var(--bleu);font-size:12px;font-weight:bold}
+#zoom{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:10000;cursor:zoom-out}
+#zoom img{max-width:92vw;max-height:92vh;box-shadow:0 0 24px #000}
+
+/* ===== NOUVEAU : liste, points, fenêtre à carrousel, fiches ===== */
+.item{flex-direction:column;gap:6px}
+.item .tete{display:flex;gap:10px}
+.badge{padding:1px 7px;border-radius:9px;color:#10202e}
+.item.encours .badge{background:var(--accent);color:#222}
+.item.avenir .badge{background:var(--avenir);color:#fff}
+.item.passe .badge{background:var(--passe);color:#10202e}
+.oeuvres{border-top:1px solid #eee;padding-top:2px}
+.ol{display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer}
+.ol:hover{text-decoration:underline}
+.ol img{width:26px;height:26px;border-radius:2px;object-fit:cover;flex:none}
+.pt div{border:2px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,.7);font:bold 12px Arial;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.pl{font-size:13px;line-height:1.4}
+.pl .chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.pl .chip{font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;cursor:pointer;opacity:.6;border:2px solid transparent}
+.pl .chip.on{opacity:1;border-color:#222}
+.pl .slide img{width:100%;height:150px;object-fit:contain;background:#efebe3;border-radius:3px;margin-bottom:6px;max-height:none}
+.pl .slide b{font-size:15px;display:block}
+.pl .prec{display:block;font-size:12px;color:#444}
+.pl small{display:block;color:#555}
+.pl .nav{display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0}
+.pl .nav button{border:1px solid var(--bleu);background:#fff;color:var(--bleu);border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:16px;line-height:1}
+.pl .hist{margin:4px 0 6px;font-size:12px}
+.pl .lh{display:inline-block;margin:2px 3px 0 0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer}
+.pl .expo{border-top:1px solid #ddd;margin-top:6px;padding-top:6px}
+.pl .nbo{margin-top:8px;padding:7px;background:var(--bleu);color:#fff;text-align:center;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold}
+#fiche{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9000;padding:12px}
+#fiche .carte{background:#fff;border-radius:8px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:16px;position:relative;font-size:13px;line-height:1.4;box-shadow:0 4px 30px rgba(0,0,0,.5)}
+#fiche .carte.orange{border-top:7px solid #E8820C}
+#fiche .x{position:absolute;top:8px;right:10px;border:0;background:none;font-size:20px;cursor:pointer;color:#555}
+#fiche .retour{border:0;background:none;color:var(--bleu);font-weight:bold;cursor:pointer;padding:0 0 8px;font-size:12px}
+#fiche .entete{display:flex;gap:12px;margin-bottom:10px;padding-right:20px}
+#fiche .entete img{width:110px;height:150px;object-fit:cover;border-radius:3px;flex:none}
+#fiche .entete b{font-size:17px;display:block;margin:4px 0}
+#fiche h4{margin:10px 0 6px;font-size:13px;color:var(--bleu);border-bottom:1px solid #ddd;padding-bottom:3px}
+#fiche .bulle{display:flex;gap:10px;border:1px solid #ddd;border-radius:8px;padding:8px;margin-bottom:8px;background:#fafafa}
+#fiche .bulle img{width:76px;height:76px;object-fit:cover;border-radius:3px;flex:none}
+#fiche small{display:block;color:#555}
+#fiche a{color:var(--bleu);font-weight:bold;font-size:12px}
+#fiche .nbpret{display:inline-block;margin:3px 0;color:#E8820C;font-weight:bold;font-size:12px;cursor:pointer;text-decoration:underline}
+#fiche .grande{width:100%;height:200px;object-fit:contain;background:#efebe3;border-radius:3px;margin:6px 0}
+#fiche .etape{border-left:6px solid #999;background:#fafafa;padding:6px 8px;margin-bottom:6px;cursor:pointer;border-radius:0 4px 4px 0}
+#fiche .etape:hover{background:#f0ece4}
+#fiche .btn{display:inline-block;margin-top:6px;padding:6px 10px;background:var(--bleu);color:#fff;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Les œuvres du musée de l'AP-HP en voyage</h1>
+  <p>Le musée de l'AP-HP prête régulièrement des œuvres de ses collections à des institutions en France et à l'étranger. Cette carte montre où elles sont exposées aujourd'hui, et où elles l'ont été.</p>
+</header>
+
+<main>
+  <div id="map"></div>
+  <aside>
+    <div class="filtres">
+      <button data-f="tous" class="actif">Tous</button>
+      <button data-f="encours">En cours</button>
+      <button data-f="avenir">À venir</button>
+      <button data-f="passe">Passés</button>
+    </div>
+    <div id="liste"></div>
+  </aside>
+</main>
+
+<div id="zoom" onclick="this.style.display='none'"><img alt=""></div>
+<div id="fiche" onclick="if(event.target===this)fermerFiche()"><div class="carte"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ===== DONNÉES : une ligne { ... }, par prêt =====
+   Remplace-le en collant la colonne P du fichier Excel.
+   Même 'inv' sur plusieurs lignes = même œuvre prêtée plusieurs fois. */
+const PRETS = [
+{ inv:'AP 2003.23.1.2', titre:'Blouse.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2003-23-1-2.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=26624', lieu:'Musée de l\'Histoire vivante, Montreuil', lat:48.8659, lng:2.4719, debut:'2026-10-31', fin:'2027-08-01', exposition:'Couleurs, histoire du travail et des luttes', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/couleurs-histoire-du-travail-et-des-luttes.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1823', titre:'L’Auscultation ou la contre-visite.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1823.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=9866', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'1', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 2007.1.2', titre:'Stéthoscope de Pinard.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2007-1-2.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=33673', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'2', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 93.7.7', titre:'Stéthoscope biauriculaire du XXe siècle.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-93-7-7.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=5258', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'3', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
+{ inv:'AP2004.0.1.4.30', titre:'Buste d\'un enfant.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2004-0-1-4-30.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=27694', lieu:'L\'espace John et Eugénie Bost, La Force', lat:44.8669, lng:0.3793, debut:'2024-06-01', fin:'2025-04-01', exposition:'Tous idiots ? mais encore… ', dateOeuvre:'', technique:'', ordre:'1', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/tous-idiots-mais-encore.jpg?raw=true', lienMusee:'https://maisonbost.com/le-musee/' },
+{ inv:'AP 2004.0.1.2.15', titre:'Lorem ipsum', image:'', lien:'', lieu:'L\'espace John et Eugénie Bost, La Force', lat:44.8669, lng:0.3793, debut:'2024-06-01', fin:'2025-04-01', exposition:'Tous idiots ? mais encore… ', dateOeuvre:'', technique:'', ordre:'2', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/tous-idiots-mais-encore.jpg?raw=true', lienMusee:'https://maisonbost.com/le-musee/' },
+{ inv:'AP 2004.0.1.3.42', titre:'Lorem ipsum', image:'', lien:'', lieu:'L\'espace John et Eugénie Bost, La Force', lat:44.8669, lng:0.3793, debut:'2024-06-01', fin:'2025-04-01', exposition:'Tous idiots ? mais encore… ', dateOeuvre:'', technique:'', ordre:'3', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/tous-idiots-mais-encore.jpg?raw=true', lienMusee:'https://maisonbost.com/le-musee/' },
+{ inv:'AP 2004.0.1.4.4', titre:'Lorem ipsum', image:'', lien:'', lieu:'L\'espace John et Eugénie Bost, La Force', lat:44.8669, lng:0.3793, debut:'2024-06-01', fin:'2025-04-01', exposition:'Tous idiots ? mais encore… ', dateOeuvre:'', technique:'', ordre:'4', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/tous-idiots-mais-encore.jpg?raw=true', lienMusee:'https://maisonbost.com/le-musee/' },
+{ inv:'CA 3037', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée d’art et d’histoire Paul-Éluard, Saint-Denis', lat:48.9321, lng:2.3559, debut:'2026-05-27', fin:'2026-11-15', exposition:'Croire et guérir. Et délivrez nous du mal', dateOeuvre:'', technique:'', ordre:'', affiche:'', lienMusee:'' },
+{ inv:'AP 639.24', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des arts décoratifs, Paris', lat:48.8632, lng:2.3334, debut:'2026-02-16', fin:'2026-10-04', exposition:'Une journée particulière à Paris au XVIIIe siècle', dateOeuvre:'', technique:'', ordre:'1', affiche:'', lienMusee:'' },
+{ inv:'AP 639.25', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des arts décoratifs, Paris', lat:48.8632, lng:2.3334, debut:'2026-02-16', fin:'2026-10-04', exposition:'Une journée particulière à Paris au XVIIIe siècle', dateOeuvre:'', technique:'', ordre:'2', affiche:'', lienMusee:'' },
+{ inv:'AP 2289', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des arts décoratifs, Paris', lat:48.8632, lng:2.3334, debut:'2026-02-16', fin:'2026-10-04', exposition:'Une journée particulière à Paris au XVIIIe siècle', dateOeuvre:'', technique:'', ordre:'3', affiche:'', lienMusee:'' },
+{ inv:'AP 2608', titre:'La Visitation', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2608.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=40220', lieu:'Musée des beaux-arts, Rennes', lat:48.1097, lng:-1.6750, debut:'2024-02-17', fin:'2025-05-15', exposition:'Noël Coypel, peintre du roi', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/noel-coypel-peintre-du-roi.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 208', titre:'Conversion de Saint-Paul', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-208.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=49980', lieu:'Musée des beaux-arts, Rennes', lat:48.1097, lng:-1.6750, debut:'2024-02-17', fin:'2025-05-15', exposition:'Noël Coypel, peintre du roi', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/noel-coypel-peintre-du-roi.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 2609', titre:'L\'Adoration des bergers', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2609.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=40225', lieu:'Musée des beaux-arts, Rennes', lat:48.1097, lng:-1.6750, debut:'2024-02-17', fin:'2025-05-15', exposition:'Noël Coypel, peintre du roi', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/noel-coypel-peintre-du-roi.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 2346', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des Beaux-Arts de Chartres ', lat:48.4488, lng:1.4880, debut:'2023-09-23', fin:'2023-12-31', exposition:'Les nouveaux héros. Paul Richer et la sculpture au travail.', dateOeuvre:'', technique:'', ordre:'1', affiche:'', lienMusee:'' },
+{ inv:'AP 2349', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des Beaux-Arts de Chartres ', lat:48.4488, lng:1.4880, debut:'2023-09-23', fin:'2023-12-31', exposition:'Les nouveaux héros. Paul Richer et la sculpture au travail.', dateOeuvre:'', technique:'', ordre:'2', affiche:'', lienMusee:'' },
+{ inv:'AP 2363', titre:'Lorem ipsum', image:'', lien:'', lieu:'Musée des Beaux-Arts de Chartres ', lat:48.4488, lng:1.4880, debut:'2023-09-23', fin:'2023-12-31', exposition:'Les nouveaux héros. Paul Richer et la sculpture au travail.', dateOeuvre:'', technique:'', ordre:'3', affiche:'', lienMusee:'' },
+{ inv:'AP 2003.6.7.1.1', titre:'Brosse à dent en crin et nacre', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2003-6-7-1-1.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=31667', lieu:'Musée de la toile de Jouy, Jouy-en-Josas', lat:48.7690, lng:2.1518, debut:'2024-06-01', fin:'2025-01-01', exposition:'Exposition consacré au crin', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/le-crin-dans-tous-ses-eclats.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1760', titre:'Le Christ aux outrages', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1760.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=9612', lieu:'Centraal Museum d’Utrecht', lat:52.0838, lng:5.1258, debut:'2018-12-13', fin:'2019-03-24', exposition:'Utrecht, Caravage et l’Europe', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/utrecht-caravage-et-l-europe.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1760', titre:'Le Christ aux outrages', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1760.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=9612', lieu:'Bayerische Staatgemaldesammlungen de Munich ', lat:48.1484, lng:11.5700, debut:'2019-04-17', fin:'2019-07-21', exposition:'Utrecht, Caravage et l’Europe', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/utrecht-caravage-et-l-europe.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1105', titre:'Attaque démoniaque', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1105.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=44713', lieu:'Scuderie del Quirinal, Rome', lat:41.8987, lng:12.4861, debut:'2021-10-15', fin:'2022-01-23', exposition:'Inferno. Una topografia del Male.', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/inferno.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1142', titre:'Salle d\'agitées à la Salpêtrière', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1142.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=44868', lieu:'Musée d’art et d’histoire du judaïsme (MAHJ), Paris', lat:48.8609, lng:2.3556, debut:'2018-10-10', fin:'2019-02-10', exposition:'Sigmund Freud, du regard à l’écoute', dateOeuvre:'', technique:'', ordre:'3', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/sigmund-freud-du-regard-a-l-ecoute.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 2256', titre:'Le Docteur Romain Vigouroux dans son service d\'électrothérapie à la Salpêtrière', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2256.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=38689', lieu:'Musée d’art et d’histoire du judaïsme (MAHJ), Paris', lat:48.8609, lng:2.3556, debut:'2018-10-10', fin:'2019-02-10', exposition:'Sigmund Freud, du regard à l’écoute', dateOeuvre:'', technique:'', ordre:'2', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/sigmund-freud-du-regard-a-l-ecoute.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 1188', titre:'Une leçon du Docteur Charcot à la Salpêtrière', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1188.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=45050', lieu:'Musée d’art et d’histoire du judaïsme (MAHJ), Paris', lat:48.8609, lng:2.3556, debut:'2018-10-10', fin:'2019-02-10', exposition:'Sigmund Freud, du regard à l’écoute', dateOeuvre:'', technique:'', ordre:'1', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/sigmund-freud-du-regard-a-l-ecoute.jpg?raw=true', lienMusee:'' },
+];
+
+/* ===== À PARTIR D'ICI, PAS BESOIN DE TOUCHER ===== */
+const AUJ = new Date().toISOString().slice(0,10);
+const COUL = { encours:'#FFD000', avenir:'#00A255', passe:'#5BC5F2' };
+const TXT  = { encours:'#222',    avenir:'#fff',    passe:'#10202e' };   // couleur du texte lisible sur chaque fond
+const LIBELLE = { encours:'EN COURS', avenir:'À VENIR', passe:'PASSÉ' };
+const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const imgVide = mot => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='120' height='120' fill='#ddd'/>" +
+  "<text x='60' y='65' font-size='13' text-anchor='middle' fill='#888' font-family='Arial'>" + mot + "</text></svg>");
+const VIDE = imgVide('image'), VIDE_AFF = imgVide('affiche');
+const dateFr = d => d.split('-').reverse().join('/');
+function dateCourte(d1, d2) {
+  const [y1,m1] = d1.split('-'), [y2,m2] = d2.split('-'), a = MOIS[m1-1], b = MOIS[m2-1];
+  if (y1===y2 && m1===m2) return a + ' ' + y1;
+  if (y1===y2) return a + ' – ' + b + ' ' + y1;
+  return a + ' ' + y1 + ' – ' + b + ' ' + y2;
+}
+const statutDe = (d,f) => (d<=AUJ && f>=AUJ) ? 'encours' : (d>AUJ ? 'avenir' : 'passe');
+const dernier = (liste, champ) => liste.map(x => x[champ]).filter(Boolean).pop() || '';
+const ville = nom => nom.split(',').map(s => s.trim()).filter(Boolean).pop() || nom;
+const ordreDe = p => { const n = parseFloat(String(p.ordre||'').replace(',','.')); return isNaN(n) ? 1e9 : n; };
+const precisions = o => [o.dateOeuvre, o.technique].filter(Boolean).join(', ');
+
+// 1) Les EXPOSITIONS : même titre + même lieu + même date de début
+PRETS.forEach((p,i) => { p.rang = i; });
+const EXPOS = [], indexExpo = {};
+PRETS.forEach(p => {
+  const cle = (p.exposition||'') + '|' + p.lieu + '|' + p.debut;
+  if (!(cle in indexExpo)) {
+    indexExpo[cle] = EXPOS.length;
+    EXPOS.push({ id:EXPOS.length, titre:p.exposition || 'Exposition (titre à renseigner)', nom:p.lieu,
+                 lat:p.lat, lng:p.lng, debut:p.debut, fin:p.fin, affiche:'', lienMusee:'', prets:[] });
+  }
+  const e = EXPOS[indexExpo[cle]];
+  e.prets.push(p); p.expo = e;
+  if (p.affiche) e.affiche = p.affiche;
+  if (p.lienMusee) e.lienMusee = p.lienMusee;
+  if (p.fin > e.fin) e.fin = p.fin;
+});
+
+// 2) Les ŒUVRES : même n° d'inventaire
+const groupes = {};
+PRETS.forEach(p => { (groupes[p.inv] = groupes[p.inv] || []).push(p); });
+const OEUVRES = Object.keys(groupes).map((inv, id) => {
+  const v = groupes[inv].sort((a,b) => a.debut.localeCompare(b.debut));
+  const o = { id, inv, voyages:v, titre:v[v.length-1].titre,
+    image:dernier(v,'image'), lien:dernier(v,'lien'),
+    dateOeuvre:dernier(v,'dateOeuvre'), technique:dernier(v,'technique') };
+  v.forEach(p => { p.oeuvre = o; });
+  return o;
+});
+
+// 3) Dans chaque expo, les œuvres sont rangées par numéro d'ordre (les sans-numéro à la fin)
+EXPOS.forEach(e => {
+  e.statut = statutDe(e.debut, e.fin);
+  const vues = {};
+  e.oeuvres = e.prets.slice().sort((a,b) => ordreDe(a) - ordreDe(b) || a.rang - b.rang)
+    .filter(p => vues[p.inv] ? false : (vues[p.inv] = true)).map(p => p.oeuvre);
+});
+
+// 4) Les LIEUX : un seul point par endroit, même s'il y a eu plusieurs expositions
+const LIEUX = [], indexLieu = {};
+EXPOS.forEach(e => {
+  const cle = e.lat.toFixed(4) + ',' + e.lng.toFixed(4);
+  if (!(cle in indexLieu)) { indexLieu[cle] = LIEUX.length; LIEUX.push({ id:LIEUX.length, lat:e.lat, lng:e.lng, expos:[], slide:{}, visibles:[], sel:-1, statut:'passe' }); }
+  const l = LIEUX[indexLieu[cle]];
+  l.expos.push(e); e.site = l;
+  l.expos.sort((a,b) => a.debut.localeCompare(b.debut));
+});
+
+const map = L.map('map', { worldCopyJump:true }).setView([30,10],2);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2wah_1_29653cf302f2901c239e64da", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a> | &copy; DPC : Archives &amp; Musée de l’AP-HP',
+  subdomains: "abcd",
+  maxZoom: 19
+}).addTo(map);
+const trajet = L.layerGroup().addTo(map);
+
+function vignette(url, vide) {
+  return url ? `<img class="zoomable" src="${url}" alt="" title="Cliquer pour agrandir" onclick="agrandir(this.src)">`
+             : `<img src="${vide||VIDE}" alt="">`;
+}
+function lienNotice(l) {
+  return l ? `<a href="${l}" target="_blank" rel="noopener">Voir la notice dans la base du musée ↗</a>` : '';
+}
+function agrandir(src) {
+  const z = document.getElementById('zoom');
+  z.querySelector('img').src = src;
+  z.style.display = 'flex';
+}
+function fermerFiche() { document.getElementById('fiche').style.display = 'none'; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { document.getElementById('zoom').style.display = 'none'; fermerFiche(); }
+});
+
+// ---------- FENÊTRE QUI S'OUVRE AU CLIC SUR UN POINT ----------
+function contenuLieu(l) {
+  // On attend la fin du clic avant de redessiner, sinon la carte croit qu'on a cliqué à côté et ferme la fenêtre
+  const rafraichir = () => setTimeout(() => { const p = l.marqueur.getPopup(); if (p && p.isOpen()) p.update(); }, 0);
+  const root = document.createElement('div');
+  root.className = 'popup pl';
+  function dessiner() {
+    const vis = l.visibles;
+    const e = EXPOS[l.sel], n = e.oeuvres.length;
+    let i = l.slide[e.id] || 0; if (i >= n) i = 0;
+    l.slide[e.id] = i;
+    const o = e.oeuvres[i];
+    let h = '';
+    if (vis.length > 1) {
+      h += '<div class="chips">' + vis.map(x =>
+        `<span class="chip${x.id===e.id?' on':''}" data-e="${x.id}" style="background:${COUL[x.statut]};color:${TXT[x.statut]}">${dateCourte(x.debut,x.fin)}</span>`).join('') + '</div>';
+    }
+    h += `<div class="slide">${vignette(o.image)}<b>${o.titre}</b>` +
+         (precisions(o) ? `<span class="prec">${precisions(o)}</span>` : '') + `<small>N° ${o.inv}</small></div>`;
+    if (n > 1) h += `<div class="nav"><button data-d="-1">‹</button><span>${i+1} / ${n}</span><button data-d="1">›</button></div>`;
+    const autres = o.voyages.filter(v => v.expo !== e);
+    if (autres.length) {
+      h += '<div class="hist">Historique de l\'œuvre : ' + autres.map(v =>
+        `<span class="lh" data-e="${v.expo.id}" data-o="${o.id}" style="background:${COUL[v.expo.statut]};color:${TXT[v.expo.statut]}">${ville(v.expo.nom)}, ${v.expo.debut.slice(0,4)}</span>`).join('') +
+        ' <span class="lh" data-trace="${o.id}" style="background:#fff;color:#1b3a6b;border:1px solid #1b3a6b">Voir le parcours</span></div>'.replace('${o.id}', o.id);
+    }
+    h += `<div class="expo"><b>Exposition :</b> <i>${e.titre}</i><br>${e.nom}<br>${dateCourte(e.debut,e.fin)}</div>`;
+    h += `<div class="nbo" data-fiche="${e.id}">${n} œuvre${n>1?'s':''} prêtée${n>1?'s':''} par le musée de l'AP-HP ›</div>`;
+    root.innerHTML = h;
+    root.querySelectorAll('.chip').forEach(c => c.onclick = () => { l.sel = +c.dataset.e; rafraichir(); });
+    root.querySelectorAll('.nav button').forEach(b => b.onclick = () => { l.slide[e.id] = (i + +b.dataset.d + n) % n; rafraichir(); });
+    root.querySelectorAll('.lh[data-e]').forEach(c => c.onclick = () => setTimeout(() => allerA(+c.dataset.e, +c.dataset.o), 0));
+    root.querySelectorAll('[data-trace]').forEach(c => c.onclick = () => tracer(OEUVRES[+c.dataset.trace], true));
+    root.querySelector('.nbo').onclick = () => ouvrirFicheExpo(e.id);
+  }
+  dessiner();
+  return root;
+}
+
+// ---------- FICHE EXPOSITION (grande fenêtre) ----------
+function ouvrirFicheExpo(id) {
+  const e = EXPOS[id];
+  const bulles = e.oeuvres.map(o =>
+    `<div class="bulle">${vignette(o.image)}<div><b>${o.titre}</b>` +
+    (precisions(o) ? `<small>${precisions(o)}</small>` : '') + `<small>N° ${o.inv}</small>` +
+    `<span class="nbpret" onclick="ouvrirFicheOeuvre(${o.id},${e.id})">Prêtée ${o.voyages.length} fois en exposition</span><br>` +
+    lienNotice(o.lien) + `</div></div>`).join('');
+  const c = document.getElementById('fiche').querySelector('.carte');
+  c.className = 'carte';
+  c.innerHTML = `<button class="x" onclick="fermerFiche()">✕</button>` +
+    `<div class="entete">${vignette(e.affiche, VIDE_AFF)}<div>` +
+    `<span class="badge" style="background:${COUL[e.statut]};color:${TXT[e.statut]};font-size:11px;font-weight:bold">${LIBELLE[e.statut]}</span>` +
+    `<b>${e.titre}</b>${e.nom}<br>${dateFr(e.debut)} au ${dateFr(e.fin)}` +
+    (e.lienMusee ? `<br><a href="${e.lienMusee}" target="_blank" rel="noopener">Site du musée ↗</a>` : '') + `</div></div>` +
+    `<h4>Les œuvres prêtées par le musée de l'AP-HP (${e.oeuvres.length})</h4>${bulles}`;
+  document.getElementById('fiche').style.display = 'flex';
+  c.scrollTop = 0;
+}
+
+// ---------- FICHE ŒUVRE (orange) : le déroulé des expositions ----------
+function ouvrirFicheOeuvre(id, retourExpo) {
+  const o = OEUVRES[id];
+  const etapes = o.voyages.map(v =>
+    `<div class="etape" style="border-left-color:${COUL[v.expo.statut]}" onclick="allerA(${v.expo.id},${o.id})">` +
+    `<b>${v.expo.titre}</b><br>${v.expo.nom}<br>${dateFr(v.debut)} au ${dateFr(v.fin)}</div>`).join('');
+  const c = document.getElementById('fiche').querySelector('.carte');
+  c.className = 'carte orange';
+  c.innerHTML = `<button class="x" onclick="fermerFiche()">✕</button>` +
+    (retourExpo !== undefined ? `<button class="retour" onclick="ouvrirFicheExpo(${retourExpo})">‹ Retour à l'exposition</button>` : '') +
+    vignette(o.image).replace('<img ', '<img style="width:100%;height:200px;object-fit:contain;background:#efebe3;border-radius:3px;margin:6px 0" ') +
+    `<br><b style="font-size:16px">${o.titre}</b>` + (precisions(o) ? `<br>${precisions(o)}` : '') +
+    `<br>N° ${o.inv}<br>${lienNotice(o.lien)}` +
+    `<h4>Prêtée ${o.voyages.length} fois en exposition</h4>${etapes}` +
+    (o.voyages.length > 1 ? `<span class="btn" onclick="fermerFiche();tracer(OEUVRES[${o.id}],true)">Voir le parcours sur la carte</span>` : '');
+  document.getElementById('fiche').style.display = 'flex';
+  c.scrollTop = 0;
+}
+
+// Parcours d'une œuvre : points numérotés reliés dans l'ordre chronologique
+function tracer(o, ajuster) {
+  trajet.clearLayers();
+  if (o.voyages.length < 2) return;
+  const pts = o.voyages.map(v => [v.lat, v.lng]);
+  L.polyline(pts, { color:'#1b3a6b', weight:2, dashArray:'5 6' }).addTo(trajet);
+  o.voyages.forEach((v,i) => {
+    L.marker([v.lat, v.lng], { icon:L.divIcon({ className:'num', html:i+1 }), zIndexOffset:1000 })
+      .on('click', () => allerA(v.expo.id, o.id)).addTo(trajet);
+  });
+  if (ajuster) map.fitBounds(L.latLngBounds(pts).pad(.4), { maxZoom:6, animate:false });
+}
+
+function allerA(idExpo, idOeuvre) {
+  const e = EXPOS[idExpo], l = e.site;
+  fermerFiche();
+  if (!l.visibles.includes(e)) { choisirFiltre('tous'); }
+  l.sel = e.id;
+  if (idOeuvre !== undefined) l.slide[e.id] = Math.max(0, e.oeuvres.findIndex(o => o.id === idOeuvre));
+  map.closePopup();
+  map.setView([l.lat, l.lng], Math.max(map.getZoom(), 6), { animate:false });
+  l.marqueur.openPopup();
+}
+
+function icone(l) {
+  const t = l.statut === 'passe' ? 20 : 26, n = l.visibles.length;
+  return L.divIcon({ className:'pt', iconSize:[t,t], iconAnchor:[t/2,t/2], popupAnchor:[0,-t/2],
+    html:`<div style="width:${t}px;height:${t}px;background:${COUL[l.statut]};color:${TXT[l.statut]}">${n>1?n:''}</div>` });
+}
+function choisir(vs) {
+  return vs.find(e => e.statut==='encours') ||
+         vs.filter(e => e.statut==='avenir').sort((a,b) => a.debut.localeCompare(b.debut))[0] ||
+         vs.slice().sort((a,b) => b.debut.localeCompare(a.debut))[0];
+}
+
+LIEUX.forEach(l => {
+  l.marqueur = L.marker([l.lat, l.lng], { icon:L.divIcon({ className:'pt' }) })
+    .bindPopup(() => contenuLieu(l), { minWidth:280, maxWidth:320, maxHeight:430 });
+});
+map.on('click', () => trajet.clearLayers());
+
+let filtre = 'tous';
+function afficher() {
+  const liste = document.getElementById('liste');
+  liste.innerHTML = '';
+  trajet.clearLayers();
+  map.closePopup();
+  const sur = [];
+  LIEUX.forEach(l => {
+    l.visibles = l.expos.filter(e => filtre==='tous' || e.statut===filtre);
+    map.removeLayer(l.marqueur);
+    if (!l.visibles.length) return;
+    l.statut = l.visibles.some(e => e.statut==='encours') ? 'encours' : (l.visibles.some(e => e.statut==='avenir') ? 'avenir' : 'passe');
+    if (!l.visibles.some(e => e.id === l.sel)) l.sel = choisir(l.visibles).id;
+    l.marqueur.setIcon(icone(l)).addTo(map);
+    sur.push(l);
+  });
+  // Bandeau de droite : les expositions d'abord, puis leurs œuvres
+  EXPOS.filter(e => filtre==='tous' || e.statut===filtre)
+       .sort((a,b) => b.debut.localeCompare(a.debut)).forEach(e => {
+    const n = e.oeuvres.length;
+    const div = document.createElement('div');
+    div.className = 'item ' + e.statut;
+    div.innerHTML = `<div class="tete"><img src="${e.affiche || (e.oeuvres[0] && e.oeuvres[0].image) || VIDE}" alt=""><div>` +
+      `<span class="nb">${n} œuvre${n>1?'s':''}</span><span class="badge">${LIBELLE[e.statut]}</span>` +
+      `<b>${e.titre}</b><small>${e.nom}</small><small>${dateCourte(e.debut,e.fin)}</small></div></div>` +
+      `<div class="oeuvres">` + e.oeuvres.map(o =>
+        `<div class="ol" data-o="${o.id}"><img src="${o.image || VIDE}" alt=""><span>${o.titre}</span></div>`).join('') + `</div>`;
+    div.querySelector('.tete').onclick = () => allerA(e.id);
+    div.querySelectorAll('.ol').forEach(x => x.onclick = ev => { ev.stopPropagation(); allerA(e.id, +x.dataset.o); });
+    liste.appendChild(div);
+  });
+  if (sur.length) map.fitBounds(L.featureGroup(sur.map(l => l.marqueur)).getBounds().pad(.3), { maxZoom:5 });
+}
+function choisirFiltre(f) {
+  filtre = f;
+  document.querySelectorAll('.filtres button').forEach(x => x.classList.toggle('actif', x.dataset.f === f));
+  afficher();
+}
+document.querySelectorAll('.filtres button').forEach(b => { b.onclick = () => choisirFiltre(b.dataset.f); });
+afficher();
+</script>
+</body>
+</html>
