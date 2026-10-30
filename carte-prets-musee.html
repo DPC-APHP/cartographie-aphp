@@ -101,8 +101,8 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
 <body>
 
 <header>
-  <h1>Les œuvres du musée de l'AP-HP en voyage</h1>
-  <p>Le musée de l'AP-HP prête régulièrement des œuvres de ses collections à des institutions en France et à l'étranger. Cette carte montre où elles sont exposées aujourd'hui, et où elles l'ont été.</p>
+  <h1>Les œuvres du musée de l’AP-HP actuellement en prêt</h1>
+  <p>Découvrez les œuvres et objets que le musée a prêté en France et dans le monde, aujourd’hui ou par le passé...  Curieux, à vos clics ! </p>
 </header>
 
 <main>
@@ -127,7 +127,7 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
    Remplace-le en collant la colonne P du fichier Excel.
    Même 'inv' sur plusieurs lignes = même œuvre prêtée plusieurs fois. */
 const PRETS = [
-{ inv:'AP 2003.23.1.2', titre:'Blouse.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2003-23-1-2.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=26624', lieu:'Musée de l\'Histoire vivante, Montreuil', lat:48.8659, lng:2.4719, debut:'2026-10-31', fin:'2027-08-01', exposition:'Couleurs, histoire du travail et des luttes', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/couleurs-histoire-du-travail-et-des-luttes.jpg?raw=true', lienMusee:'' },
+{ inv:'AP 2003.23.1.2', titre:'Blouse.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2003-23-1-2.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=26624', lieu:'Musée de l\'Histoire vivante, Montreuil', lat:48.8659, lng:2.4719, debut:'2026-10-31', fin:'2027-08-01', exposition:'Couleurs, histoire du travail et des luttes', dateOeuvre:'', technique:'', ordre:'', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/couleurs-histoire-du-travail-et-des-luttes.jpg?raw=true', lienMusee:'https://www.montreuil.fr/agenda/exposition-couleurs-histoire-du-travail-et-des-luttes' },
 { inv:'AP 1823', titre:'L’Auscultation ou la contre-visite.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-1823.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=9866', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'1', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
 { inv:'AP 2007.1.2', titre:'Stéthoscope de Pinard.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-2007-1-2.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=33673', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'2', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
 { inv:'AP 93.7.7', titre:'Stéthoscope biauriculaire du XXe siècle.', image:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/AP-93-7-7.jpg?raw=true', lien:'https://www.musee-collections.aphp.fr/app/photopro.sk/aphp/detail?docid=5258', lieu:'Musée Dobre, Nantes', lat:47.2121, lng:-1.5664, debut:'2025-10-17', fin:'2026-03-01', exposition:'À cœurs ouverts', dateOeuvre:'', technique:'', ordre:'3', affiche:'https://github.com/DPC-APHP/cartographie-aphp/blob/main/images_musee/a-cœurs-ouverts.jpg?raw=true', lienMusee:'' },
