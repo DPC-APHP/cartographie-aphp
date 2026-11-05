@@ -21,6 +21,9 @@ html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;color:var(
 body{display:flex;flex-direction:column}
 header{background:var(--bleu);color:#fff;padding:14px 0 14px 20px;display:flex;align-items:center}
 header .titres{flex:1;min-width:0}
+.poignee{display:none;justify-content:center;align-items:center;padding:8px 0;background:#fff;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.poignee span{display:block;width:44px;height:5px;border-radius:3px;background:#b5b5b5}
+.anim aside,.anim #map{transition:height .25s}
 .titre-mobile{display:none;background:var(--bleu);color:#fff;text-align:center;font-weight:bold;font-size:15px;letter-spacing:1px;padding:10px}
 .titre-volet{width:340px;flex:none;text-align:center;font-weight:bold;font-size:16px;letter-spacing:1px}
 header h1{margin:0 0 4px;font-size:22px}
@@ -45,7 +48,7 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
 .expo{color:#333}
 .popup img{width:100%;max-height:150px;object-fit:cover;border-radius:3px;margin-bottom:6px}
 .popup b{font-size:15px}
-@media (max-width:760px){.titre-volet{display:none}.titre-mobile{display:block}header{padding-right:20px}main{flex-direction:column}aside{width:100%;height:40%}#map{height:60%}}
+@media (max-width:760px){.titre-volet{display:none}.titre-mobile{display:block}.poignee{display:flex}header{padding-right:20px}main{flex-direction:column}aside{width:100%;height:var(--haut,40%)}#map{height:calc(100% - var(--haut,40%))}}
 .num{background:#fff;border:2px solid var(--bleu);color:var(--bleu);border-radius:50%;font:bold 11px Arial;text-align:center;line-height:18px;width:22px!important;height:22px!important;padding-top:1px}
 .popup ol{margin:6px 0 0;padding-left:20px;font-size:12px}
 .popup li{cursor:pointer;margin-bottom:3px}.popup li:hover{text-decoration:underline}
@@ -80,7 +83,7 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
 .pl .nav button{border:1px solid var(--bleu);background:#fff;color:var(--bleu);border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:16px;line-height:1}
 .pl .hist{margin:4px 0 6px;font-size:12px}
 .pl .lh{display:inline-block;margin:2px 3px 0 0;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer}
-.pl .expo{border-top:1px solid #ddd;margin-top:6px;padding-top:6px}
+.pl .expo{background:#efefef;margin-top:8px;padding:8px;border-radius:4px}
 .pl .nbo{margin-top:8px;padding:7px;background:var(--bleu);color:#fff;text-align:center;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold}
 #fiche{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9000;padding:12px}
 #fiche .carte{background:#fff;border-radius:8px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:16px;position:relative;font-size:13px;line-height:1.4;box-shadow:0 4px 30px rgba(0,0,0,.5)}
@@ -107,7 +110,7 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
 <header>
   <div class="titres">
   <h1>Les œuvres du musée de l’AP-HP actuellement en prêt</h1>
-  <p>Découvrez les œuvres et objets que le musée a prêté en France et dans le monde, aujourd’hui ou par le passé...  Curieux, à vos clics ! </p>
+  <p></p>
   </div>
   <div class="titre-volet">LES EXPOSITIONS</div>
 </header>
@@ -115,6 +118,7 @@ aside{width:340px;background:var(--fond);display:flex;flex-direction:column;bord
 <main>
   <div id="map"></div>
   <aside>
+    <div class="poignee" id="poignee" role="button" aria-label="Agrandir ou réduire la liste"><span></span></div>
     <div class="titre-mobile">LES EXPOSITIONS</div>
     <div class="filtres">
 	  <button data-f="tous">Tous</button>
@@ -420,6 +424,46 @@ function choisirFiltre(f) {
 }
 document.querySelectorAll('.filtres button').forEach(b => { b.onclick = () => choisirFiltre(b.dataset.f); });
 choisirFiltre(filtre);
+
+// Poignée du volet sur téléphone : glisser vers le haut/bas, ou toucher pour basculer petit/grand
+(function () {
+  const main = document.querySelector('main');
+  const aside = document.querySelector('aside');
+  const poignee = document.getElementById('poignee');
+  let departY = null, departH = 0, aBouge = false, raf = 0;
+
+  function reglerHauteur(px) {
+    const total = main.clientHeight;
+    const pct = Math.max(15, Math.min(85, px / total * 100));
+    main.style.setProperty('--haut', pct + '%');
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; map.invalidateSize(); });
+  }
+
+  poignee.addEventListener('pointerdown', e => {
+    departY = e.clientY;
+    departH = aside.offsetHeight;
+    aBouge = false;
+    poignee.setPointerCapture(e.pointerId);
+  });
+  poignee.addEventListener('pointermove', e => {
+    if (departY === null) return;
+    const dy = departY - e.clientY;
+    if (Math.abs(dy) > 6) aBouge = true;
+    if (aBouge) reglerHauteur(departH + dy);
+  });
+  function fin() {
+    if (departY === null) return;
+    departY = null;
+    if (aBouge) { map.invalidateSize(); return; }
+    // simple toucher : bascule entre petit (40 %) et grand (80 %)
+    const grand = aside.offsetHeight / main.clientHeight > 0.6;
+    main.classList.add('anim');
+    reglerHauteur(main.clientHeight * (grand ? 0.4 : 0.8));
+    setTimeout(() => { main.classList.remove('anim'); map.invalidateSize(); }, 300);
+  }
+  poignee.addEventListener('pointerup', fin);
+  poignee.addEventListener('pointercancel', () => { departY = null; });
+})();
 </script>
 </body>
 </html>
